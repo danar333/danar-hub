@@ -2736,9 +2736,15 @@ if IS_MM2 then
     createNote(pg, "Fitur ini spesifik untuk Murder Mystery 2. Role dideteksi dari tool yang dipegang/disimpan player.")
 end
 
+-- jaring pengaman: satu tab error nggak boleh bunuhin GUI + fitur lain
+local function safeTab(name, fn)
+    local okT, err = pcall(fn)
+    if not okT then
+        warn("[Danar Hub] Tab " .. name .. " gagal dimuat: " .. tostring(err))
+    end
+end
+
 -- ================= BLOX FRUITS MODE (Fase 1+2) =================
-BF = nil -- global: diakses juga oleh runCleanup
-if IS_BF then
 BF = {
     FarmOn = false, FarmMode = "Terdekat", BringMob = true,
     FastAtk = false, AttackOn = false,
@@ -2764,13 +2770,7 @@ BF = {
 
 local BF_WORLD = math.max(BF_WORLD_DETECTED, 1)
 
--- jaring pengaman: satu tab error nggak boleh bunuhin GUI + fitur lain
-local function safeTab(name, fn)
-    local okT, err = pcall(fn)
-    if not okT then
-        warn("[Danar Hub] Tab " .. name .. " gagal dimuat: " .. tostring(err))
-    end
-end
+do -- BF scope: all BF functions, loops, fighting styles, and tabs
 
 -- koordinat island semua laut (generate dari source Alchemy Hub)
 local ISLANDS_BY_WORLD = {
@@ -3382,7 +3382,6 @@ local function bfFarmLoop()
     local bv = root and root:FindFirstChild("BF_Noclip")
     if bv then bv:Destroy() end
 end    BF.AttackOn = false
-end
 
 
 -- ===== Farm Lain — porting Alchemy =====
@@ -4753,6 +4752,7 @@ safeTab("Setelan", function()
     sectionLabel(pg, "Info")
     createNote(pg, "Mode Blox Fruits v1 lengkap (Fase 1-3).\nCreated by danar")
 end)
+end -- BF scope
 
 selectTab(1)
 
