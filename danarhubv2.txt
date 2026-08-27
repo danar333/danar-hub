@@ -2965,192 +2965,173 @@ local function goTo(cf)
     end
 end
 
--- ===== Attack System (Alchemy Delta-compatible) =====
--- Disable camera shake
-do
-    local ok, kkii = pcall(function()
-        return require(game:GetService("ReplicatedStorage").Util.CameraShaker)
-    end)
-    if ok and kkii and kkii.Stop then pcall(kkii.Stop, kkii) end
-end
-
--- CombatFramework modules
-local PC, RL, DMG, RigC, Combat = nil, nil, nil, nil, nil
-do
-    local ps = player:FindFirstChild("PlayerScripts")
-    local ok1, _pc = pcall(function() return require(ps.CombatFramework.Particle) end)
-    if ok1 then PC = _pc end
-    local ok2, _rl = pcall(function() return require(game:GetService("ReplicatedStorage").CombatFramework.RigLib) end)
-    if ok2 then RL = _rl end
-    local ok3, _dmg = pcall(function() return require(ps.CombatFramework.Particle.Damage) end)
-    if ok3 then DMG = _dmg end
-    local ok4, _rc = pcall(function() return getupvalue and getupvalue(require(ps.CombatFramework.RigController), 2) end)
-    if ok4 then RigC = _rc end
-    local ok5, _c = pcall(function() return getupvalue and getupvalue(require(ps.CombatFramework), 2) end)
-    if ok5 then Combat = _c end
-end
-
--- RigControllerEvent (remote serangan BF)
-local RigEvent = nil
-do
-    local ok, rs = pcall(function() return game:GetService("ReplicatedStorage"):WaitForChild("RigControllerEvent", 5) end)
-    if ok then RigEvent = rs end
-end
-
--- canHits: daftar HRP musuh dalam 65 stud
-local canHits = {}
-local function updateCanHits()
-    table.clear(canHits)
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    local ok, enemies = pcall(function() return workspace:FindFirstChild("Enemies") end)
-    if ok and enemies then
-        for _, v in ipairs(enemies:GetChildren()) do
-            local h = v:FindFirstChildOfClass("Humanoid")
-            local p = v:FindFirstChild("HumanoidRootPart")
-            if h and p and h.Health > 0 and (p.Position - root.Position).Magnitude < 65 then
-                canHits[#canHits + 1] = p
-            end
-        end
-    end
-    -- tambah mob dari CollectionService ActiveRig tag
-    pcall(function()
-        local tagged = game:GetService("CollectionService"):GetTagged("ActiveRig")
-        for i = 1, #tagged do
-            local v = tagged[i]
-            if v ~= char then
-                local h = v:FindFirstChildOfClass("Humanoid")
-                local p = v:FindFirstChild("HumanoidRootPart")
-                if h and p and h.Health > 0 and (p.Position - root.Position).Magnitude < 65 then
-                    canHits[#canHits + 1] = p
-                end
-            end
-        end
-    end)
-end
-
--- Update canHits setiap 0.075 detik
+-- ===== Attack System (direct Alchemy port) =====
 task.spawn(function()
-    while task.wait(0.075) do
-        pcall(updateCanHits)
-    end
+-- Disable camera shake
+pcall(function()
+    require(game:GetService("ReplicatedStorage").Util.CameraShaker):Stop()
 end)
 
--- Override wrapAttackAnimationAsync untuk speed boost
-do
-    if RL and RL.wrapAttackAnimationAsync then
-        local oldWrap = RL.wrapAttackAnimationAsync
-        if not shared._origWrap then shared._origWrap = oldWrap end
-        if not shared._origPlay then shared._origPlay = PC and PC.play end
-        if not shared._origDmg then shared._origDmg = DMG and DMG.new end
-        if not shared._origAttack then shared._origAttack = RigC and RigC.attack end
+-- CombatFramework modules (direct require — match Alchemy exactly)
+local Char = player.Character or player.CharacterAdded:Wait()
+local Root = Char and Char:FindFirstChild("HumanoidRootPart")
+local LocalPlayer = player
+local CollectionService = game:GetService("CollectionService")
 
-        RL.wrapAttackAnimationAsync = function(a, b, c, d, func)
-            if BF.FastAtk then
-                if PC and shared._origPlay then PC.play = shared._origPlay end
-                return shared._origWrap(a, b, c, 65, func)
-            end
-            if BF.FastAtk and canHits and #canHits > 0 then
-                if PC then PC.play = function() end end
-                a:Play(0.00075, 0.01, 0.01)
-                func(canHits)
-                task.wait(a.Length * 0.5)
-                a:Stop()
-            end
-            return shared._origWrap(a, b, c, d, func)
-        end
-        BF._restoreWrap = function()
-            RL.wrapAttackAnimationAsync = oldWrap
-        end
-    end
+local PC = require(LocalPlayer.PlayerScripts.CombatFramework.Particle)
+local RL = require(game:GetService("ReplicatedStorage").CombatFramework.RigLib)
+local DMG = require(LocalPlayer.PlayerScripts.CombatFramework.Particle.Damage)
+local RigC = getupvalue(require(LocalPlayer.PlayerScripts.CombatFramework.RigController), 2)
+local Combat = getupvalue(require(LocalPlayer.PlayerScripts.CombatFramework), 2)
+
+local RigEvent = game:GetService("ReplicatedStorage"):WaitForChild("RigControllerEvent", 10)
+
+-- canHits: daftar HRP musuh dalam 65 stud
+local CurrentAllMob = {}
+local canHits = {}
+
+local function dist(a, b, noHeight)
+    if not b then b = Root.Position end
+    return (Vector3.new(a.X, not noHeight and a.Y, a.Z) - Vector3.new(b.X, not noHeight and b.Y, b.Z)).Magnitude
 end
 
--- Force reset Stun & Busy setiap frame (Alchemy trick)
-bind(RunService.RenderStepped:Connect(function()
-    if not BF.AttackOn then return end
-    pcall(function()
-        local char = player.Character
-        if char then
-            if char:FindFirstChild("Stun") then char.Stun.Value = 0 end
-            if char:FindFirstChild("Busy") then char.Busy.Value = false end
-        end
-    end)
-end))
-
--- Main attack loop
+-- Starter Thread: scan musuh tiap 0.075 detik
 task.spawn(function()
-    local lastFireValid = 0
-    local AttackCD = 0
-    local maxLag = 350
-    local tryLag = 0
-    local fucker = 0.0000007
-    while task.wait() do
+    while task.wait(0.075) do
         pcall(function()
-            if not BF.AttackOn then return end
-            if #canHits <= 0 then return end
-
-            local ctrl = Combat and Combat.activeController
-            BF._ctrlOK = (ctrl ~= nil)
-
-            if ctrl and ctrl.equipped and ctrl.currentWeaponModel then
-                local char = player.Character
-                local busy = char and char:FindFirstChild("Busy") and char.Busy.Value
-                local stun = char and char:FindFirstChild("Stun") and char.Stun.Value
-                if busy or (stun and stun > 0) then return end
-
-                if BF.FastAtk then
-                    -- reset cooldown jika perlu
-                    if tick() > AttackCD then
-                        local wname = ctrl.currentWeaponModel.Name
-                        local cd = { combat = 0.07 }
-                        AttackCD = tick() + (fucker or cd[wname:lower()] or 0.285) + ((tryLag / maxLag) * 0.3)
-                        if RigEvent then pcall(function() RigEvent:FireServer(RigEvent, "weaponChange", wname) end) end
-                        tryLag = tryLag + 1
-                        task.delay((fucker or 0.285) + (tryLag + 0.5 / maxLag) * 0.3, function()
-                            tryLag = tryLag - 1
-                        end)
-                    end
-
-                    if tick() - lastFireValid > 0.5 then
-                        ctrl.timeToNextAttack = 0
-                        ctrl.increment = 1
-                        ctrl.hitboxMagnitude = 65
-                        task.spawn(function() pcall(ctrl.attack, ctrl) end)
-                        lastFireValid = tick()
-                    end
-
-                    -- play animasi + fire remote "hit" langsung ke canHits
-                    local anims = ctrl.anims and ctrl.anims.basic
-                    local aid = anims and (anims[3] or anims[2])
-                    if aid then
-                        local anim = Instance.new("Animation")
-                        anim.AnimationId = aid
-                        local playing = ctrl.humanoid:LoadAnimation(anim)
-                        playing:Play(0.00075, 0.01, 0.01)
-                        if RigEvent then
-                            pcall(function()
-                                RigEvent:FireServer(RigEvent, "hit", canHits, anims[3] and 1 or 2, "")
-                            end)
+            local nearbymon = false
+            table.clear(CurrentAllMob)
+            table.clear(canHits)
+            local mobs = CollectionService:GetTagged("ActiveRig")
+            for i = 1, #mobs do
+                local v = mobs[i]
+                local Human = v:FindFirstChildOfClass("Humanoid")
+                if Human and Human.Health > 0 and Human.RootPart and v ~= Char then
+                    local IsPlayer = game.Players:GetPlayerFromCharacter(v)
+                    local IsAlly = IsPlayer and CollectionService:HasTag(IsPlayer, "Ally" .. LocalPlayer.Name)
+                    if not IsAlly then
+                        CurrentAllMob[#CurrentAllMob + 1] = v
+                        if not nearbymon and dist(Human.RootPart.Position) < 65 then
+                            nearbymon = true
                         end
                     end
-                else
-                    -- tanpa FastAtk: attack biasa + VirtualUser click
-                    ctrl.timeToNextAttack = 0
-                    ctrl.increment = 0
-                    ctrl.hitboxMagnitude = 65
-                    task.spawn(function() pcall(ctrl.attack, ctrl) end)
-                    pcall(function()
-                        local vu = game:GetService("VirtualUser")
-                        vu:CaptureController()
-                        vu:Button1Down(Vector2.new(1280, 672))
-                        vu:Button1Up(Vector2.new(1280, 672))
-                    end)
+                end
+            end
+            if nearbymon then
+                local Enemies = workspace:FindFirstChild("Enemies")
+                if Enemies then
+                    for i = 1, #Enemies:GetChildren() do
+                        local v = Enemies:GetChildren()[i]
+                        local Human = v:FindFirstChildOfClass("Humanoid")
+                        if Human and Human.RootPart and Human.Health > 0 and dist(Human.RootPart.Position) < 65 then
+                            canHits[#canHits + 1] = Human.RootPart
+                        end
+                    end
+                end
+                for i = 1, #game.Players:GetPlayers() do
+                    local p = game.Players:GetPlayers()[i]
+                    local v = p.Character
+                    if not p:GetAttribute("PvpDisabled") and v and v ~= LocalPlayer.Character then
+                        local Human = v:FindFirstChildOfClass("Humanoid")
+                        if Human and Human.RootPart and Human.Health > 0 and dist(Human.RootPart.Position) < 65 then
+                            canHits[#canHits + 1] = Human.RootPart
+                        end
+                    end
                 end
             end
         end)
     end
 end)
+
+-- Hook wrapAttackAnimationAsync
+if not shared.orl then shared.orl = RL.wrapAttackAnimationAsync end
+if not shared.cpc then shared.cpc = PC.play end
+if not shared.dnew then shared.dnew = DMG.new end
+if not shared.attack then shared.attack = RigC.attack end
+
+RL.wrapAttackAnimationAsync = function(a, b, c, d, func)
+    if BF.FastAtk then
+        PC.play = shared.cpc
+        return shared.orl(a, b, c, 65, func)
+    end
+    return shared.orl(a, b, c, d, func)
+end
+
+BF._restoreWrap = function()
+    RL.wrapAttackAnimationAsync = shared.orl
+end
+
+-- Force reset Stun & Busy setiap frame
+bind(RunService.RenderStepped:Connect(function()
+    if BF.FastAtk or BF.AttackOn then
+        pcall(function()
+            local c = player.Character
+            if c and c:FindFirstChild("Stun") then c.Stun.Value = 0 end
+            if c and c:FindFirstChild("Busy") then c.Busy.Value = false end
+        end)
+    end
+end))
+
+-- Main Fast Attack loop (direct Alchemy port)
+local Animation = Instance.new("Animation")
+local AttackCD = 0
+local Controller
+local lastFireValid = 0
+local MaxLag = 350
+local fucker = 0.0000007
+local TryLag = 0
+local resetCD = function()
+    local wname = Controller.currentWeaponModel.Name
+    local Cooldown = { combat = 0.07 }
+    AttackCD = tick() + (Cooldown[wname:lower()] or fucker or 0.285) + ((TryLag / MaxLag) * 0.3)
+    RigEvent:FireServer("weaponChange", wname)
+    TryLag = TryLag + 1
+    task.delay((fucker or 0.285) + (TryLag + 0.5 / MaxLag) * 0.3, function()
+        TryLag = TryLag - 1
+    end)
+end
+
+while task.wait() do
+    pcall(function()
+        if #canHits > 0 and (BF.FastAtk or BF.AttackOn) then
+            Controller = Combat.activeController
+            if Controller and Controller.equipped and Controller.currentWeaponModel then
+                local c = player.Character
+                local busyVal = c and c:FindFirstChild("Busy") and c.Busy.Value
+                local stunVal = c and c:FindFirstChild("Stun") and c.Stun.Value
+                if not busyVal and stunVal == 0 then
+                    if BF.FastAtk then
+                        if tick() > AttackCD then resetCD() end
+                        if tick() - lastFireValid > 0.5 then
+                            Controller.timeToNextAttack = 0
+                            Controller.increment = 1
+                            Controller.hitboxMagnitude = 65
+                            pcall(task.spawn, Controller.attack, Controller)
+                            lastFireValid = tick()
+                        end
+                        local AID3 = Controller.anims.basic[3]
+                        local AID2 = Controller.anims.basic[2]
+                        local ID = AID3 or AID2
+                        if ID then
+                            Animation.AnimationId = ID
+                            local Playing = Controller.humanoid:LoadAnimation(Animation)
+                            Playing:Play(0.00075, 0.01, 0.01)
+                            RigEvent:FireServer("hit", canHits, AID3 and 1 or 2, "")
+                            pcall(Controller.attack)
+                        end
+                    else
+                        Controller.timeToNextAttack = 0
+                        Controller.increment = 0
+                        Controller.hitboxMagnitude = 65
+                        pcall(task.spawn, Controller.attack, Controller)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+end) -- end attack system
 
 local function equipAnyWeapon()
     local char = player.Character
