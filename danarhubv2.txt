@@ -2972,17 +2972,22 @@ pcall(function()
     require(game:GetService("ReplicatedStorage").Util.CameraShaker):Stop()
 end)
 
--- CombatFramework modules (direct require — match Alchemy exactly)
+-- CombatFramework modules (pcall per module — kalau gagal, feature gak jalan)
 local Char = player.Character or player.CharacterAdded:Wait()
 local Root = Char and Char:FindFirstChild("HumanoidRootPart")
 local LocalPlayer = player
 local CollectionService = game:GetService("CollectionService")
 
-local PC = require(LocalPlayer.PlayerScripts.CombatFramework.Particle)
-local RL = require(game:GetService("ReplicatedStorage").CombatFramework.RigLib)
-local DMG = require(LocalPlayer.PlayerScripts.CombatFramework.Particle.Damage)
-local RigC = getupvalue(require(LocalPlayer.PlayerScripts.CombatFramework.RigController), 2)
-local Combat = getupvalue(require(LocalPlayer.PlayerScripts.CombatFramework), 2)
+local okPC, PC = pcall(function() return require(LocalPlayer.PlayerScripts.CombatFramework.Particle) end)
+if not okPC then PC = nil end
+local okRL, RL = pcall(function() return require(game:GetService("ReplicatedStorage").CombatFramework.RigLib) end)
+if not okRL then RL = nil end
+local okDMG, DMG = pcall(function() return require(LocalPlayer.PlayerScripts.CombatFramework.Particle.Damage) end)
+if not okDMG then DMG = nil end
+local okRigC, RigC = pcall(function() return getupvalue and getupvalue(require(LocalPlayer.PlayerScripts.CombatFramework.RigController), 2) end)
+if not okRigC then RigC = nil end
+local okCombat, Combat = pcall(function() return getupvalue and getupvalue(require(LocalPlayer.PlayerScripts.CombatFramework), 2) end)
+if not okCombat then Combat = nil end
 
 local RigEvent = game:GetService("ReplicatedStorage"):WaitForChild("RigControllerEvent", 10)
 
