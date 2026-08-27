@@ -2967,9 +2967,13 @@ end
 
 -- ===== Attack System (direct Alchemy port) =====
 task.spawn(function()
--- Disable camera shake
+-- Disable camera shake + setfflag
 pcall(function()
     require(game:GetService("ReplicatedStorage").Util.CameraShaker):Stop()
+end)
+pcall(function()
+    setfflag("AbuseReportScreenshot", "False")
+    setfflag("AbuseReportScreenshotPercentage", "0")
 end)
 
 -- CombatFramework modules (pcall per module — kalau gagal, feature gak jalan)
@@ -2988,6 +2992,8 @@ local okRigC, RigC = pcall(function() return getupvalue and getupvalue(require(L
 if not okRigC then RigC = nil end
 local okCombat, Combat = pcall(function() return getupvalue and getupvalue(require(LocalPlayer.PlayerScripts.CombatFramework), 2) end)
 if not okCombat then Combat = nil end
+
+BF._modules = { PC = PC ~= nil, RL = RL ~= nil, DMG = DMG ~= nil, RigC = RigC ~= nil, Combat = Combat ~= nil }
 
 local RigEvent = game:GetService("ReplicatedStorage"):WaitForChild("RigControllerEvent", 10)
 
@@ -3098,8 +3104,10 @@ end
 
 while task.wait() do
     pcall(function()
+        BF._canHitsCount = #canHits
         if #canHits > 0 and (BF.FastAtk or BF.AttackOn) then
-            Controller = Combat.activeController
+            Controller = Combat and Combat.activeController
+            BF._ctrlOK = (Controller ~= nil)
             if Controller and Controller.equipped and Controller.currentWeaponModel then
                 local c = player.Character
                 local busyVal = c and c:FindFirstChild("Busy") and c.Busy.Value
@@ -3131,6 +3139,24 @@ while task.wait() do
                         pcall(task.spawn, Controller.attack, Controller)
                     end
                 end
+            elseif BF.AttackOn then
+                -- Fallback: VirtualUser click + tool activate (kalau Combat nil)
+                pcall(function()
+                    local vu = game:GetService("VirtualUser")
+                    vu:CaptureController()
+                    vu:Button1Down(Vector2.new(1280, 672))
+                    vu:Button1Up(Vector2.new(1280, 672))
+                end)
+                pcall(function()
+                    local char = player.Character
+                    local tool = char and char:FindFirstChildOfClass("Tool")
+                    if tool and tool.Activate then tool:Activate() end
+                end)
+                pcall(function()
+                    local vim = game:GetService("VirtualInputManager")
+                    vim:SendMouseButtonEvent(0, 0, 0, true, nil, 0)
+                    vim:SendMouseButtonEvent(0, 0, 0, false, nil, 0)
+                end)
             end
         end
     end)
@@ -3158,6 +3184,20 @@ local function equipAnyWeapon()
     if best then hum:EquipTool(best) end
 end
 
+-- cek apakah NPC masih valid (bukan ghost/dead-but-visible)
+local function isNPCAlive(v)
+    if not v or not v.Parent then return false end
+    local eh = v:FindFirstChildOfClass("Humanoid")
+    local ep = v:FindFirstChild("HumanoidRootPart")
+    if not eh or not ep then return false end
+    if eh.Health <= 0 then return false end
+    -- ghost: transparan = dead tapi masih ada di workspace
+    if ep.Transparency >= 0.5 then return false end
+    -- ghost: walkSpeed 0 + idle anim = dead tapi model masih ada
+    if eh.WalkSpeed <= 0 and eh:GetState() == Enum.HumanoidStateType.Dead then return false end
+    return true
+end
+
 local function nearestEnemy(monName)
     local enemies = workspace:FindFirstChild("Enemies")
     local char = player.Character
@@ -3165,9 +3205,8 @@ local function nearestEnemy(monName)
     if not enemies or not root then return nil end
     local best, bestD = nil, math.huge
     for _, e in ipairs(enemies:GetChildren()) do
-        local eh = e:FindFirstChildOfClass("Humanoid")
-        local ep = e:FindFirstChild("HumanoidRootPart")
-        if eh and ep and eh.Health > 0 and (not monName or e.Name == monName) then
+        if isNPCAlive(e) and (not monName or e.Name == monName) then
+            local ep = e:FindFirstChild("HumanoidRootPart")
             local d = (ep.Position - root.Position).Magnitude
             if d < bestD then best, bestD = e, d end
         end
@@ -3266,10 +3305,7 @@ local function fightEnemy(v, quest)
             pcall(sethiddenproperty, player, "SimulationRadius", math.huge)
         end)
     until not BF.FarmOn
-        or not v.Parent
-        or not v:FindFirstChild("HumanoidRootPart")
-        or not v:FindFirstChildOfClass("Humanoid")
-        or v:FindFirstChildOfClass("Humanoid").Health <= 0
+        or not isNPCAlive(v)
         or (quest and not questGuiVisible())
     BF.StartMagnet = false
     BF.AttackOn = false
@@ -3438,8 +3474,7 @@ local function bfFarmLoop()
                         if v.Name == b.mon then
                             local vh = v:FindFirstChildOfClass("Humanoid")
                             local vp = v:FindFirstChild("HumanoidRootPart")
-                            if vh and vp and vh.Health > 0 then
-                                -- validasi judul lagi sebelum fight
+                            if isNPCAlive(v) then
                                 local t2 = nil
                                 pcall(function()
                                     local pg = player:FindFirstChild("PlayerGui")
@@ -3502,7 +3537,7 @@ local function bfFarmLoop()
                         if v.Name == b.mon then
                             local vh = v:FindFirstChildOfClass("Humanoid")
                             local vp = v:FindFirstChild("HumanoidRootPart")
-                            if vh and vp and vh.Health > 0 then
+                            if isNPCAlive(v) then
                                 fightEnemy(v, false)
                             end
                         end
@@ -4491,6 +4526,33 @@ safeTab("Farm", function()
         "Perbesar tubuh musuh biar damage masuk dari jarak jauh")
     createSlider(pg, "Hitbox Size", 10, 100, 20, function(v) BF.HitboxSize = v end,
         "Ukuran hitbox musuh saat Hitbox Expand aktif")
+    sectionLabel(pg, "Attack Status")
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(1, -16, 0, 40)
+    statusLabel.BackgroundTransparency = 0.6
+    statusLabel.BackgroundColor3 = THEME.Card
+    statusLabel.TextColor3 = THEME.SubText
+    statusLabel.Font = Enum.Font.GothamBold
+    statusLabel.TextSize = 11
+    statusLabel.TextWrapped = true
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    statusLabel.Text = "Loading..."
+    statusLabel.Parent = pg
+    round(statusLabel, 6)
+    task.spawn(function()
+        while task.wait(1) do
+            local modules = BF._modules or {}
+            local hits = BF._canHitsCount or 0
+            statusLabel.Text = string.format(
+                "PC:%s RL:%s Combat:%s | canHits:%d | Ctrl:%s",
+                modules.PC and "OK" or "NO",
+                modules.RL and "OK" or "NO",
+                modules.Combat and "OK" or "NO",
+                hits,
+                BF._ctrlOK and "OK" or "NO"
+            )
+        end
+    end)
     sectionLabel(pg, "Auto Stats")
     createSlider(pg, "Poin Per Tambah", 1, 100, 1, function(v) BF.StatPoints = v end)
     createToggle(pg, "Stats Melee", false, function(v) BF.StatMelee = v end)
