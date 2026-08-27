@@ -2763,6 +2763,7 @@ BF = {
     KillAt = 20, SelectBoss = nil,
     AutoSuperhuman = false, AutoDeathStep = false, AutoSharkman = false, AutoElectricClaw = false, AutoDragonTalon = false, AutoGodHuman = false,
     MaterialRadioactive = false, MaterialMysticDroplet = false,
+    HitboxExpand = false, HitboxSize = 20,
     MoonCam = false, QuestRace = false, TpMirage = false,
     BlueGear = false, ChestMirage = false, FruitDealer = false,
     TpKitsune = false, CollectAzure = false, SeaHunt = false,
@@ -2999,14 +3000,14 @@ local function getController()
 end
 
 bind(RunService.Heartbeat:Connect(function()
-    if not BF.FastAtk or not BF.AttackOn then return end
+    if not BF.AttackOn then return end
     local ctrl = getController()
     BF._ctrlOK = (ctrl ~= nil)
     if ctrl and ctrl.equipped then
         pcall(function()
             ctrl.timeToNextAttack = 0
-            ctrl.increment = 1
-            ctrl.hitboxMagnitude = 65
+            ctrl.increment = BF.FastAtk and 1 or 0
+            ctrl.hitboxMagnitude = BF.FastAtk and 100 or 65
             task.spawn(function() pcall(ctrl.attack, ctrl) end)
         end)
     end
@@ -3107,8 +3108,7 @@ BF.Pos = CFrame.new(0, 5, 0)
 
 -- ===== AUTO FARM REWRITE — proven patterns =====
 
--- lock-on: tween ke offset + click spam, repeat-until musuh tumbang/mati
--- tanpa hitbox expansion (unreliable), offset kecil (5 stud di atas)
+-- lock-on: tween ke offset + attack spam, repeat-until musuh tumbang/mati
 local function fightEnemy(v, quest)
     local vh = v:FindFirstChildOfClass("Humanoid")
     if not vh then return end
@@ -3129,16 +3129,18 @@ local function fightEnemy(v, quest)
         BF.NameMon = BF.NameMon or v.Name
         BF.StartMagnet = true
         BF.AttackOn = true
-        -- tween smooth ke offset di atas mob (no jitter)
-        atween(vp.CFrame * BF.Pos)
-        -- disable collision musuh biar gak nge-block
+        -- tween smooth ke dekat mob
+        local dist = (vp.Position - rp.Position).Magnitude
+        local cf = dist <= 10 and vp.CFrame * CFrame.new(0, 0, -3) or vp.CFrame * CFrame.new(0, 3, 0)
+        atween(cf)
+        -- disable collision musuh
         pcall(function()
             vp.CanCollide = false
             vh.WalkSpeed = 0
             local vhead = v:FindFirstChild("Head")
             if vhead then vhead.CanCollide = false end
         end)
-        -- click spam
+        -- click spam (backup untuk executor yang support VirtualUser)
         pcall(function()
             local vu = game:GetService("VirtualUser")
             vu:CaptureController()
@@ -3218,6 +3220,39 @@ task.spawn(function()
                     end
                 end
             end)
+        end
+    end
+end)
+
+-- Hitbox expansion: perbesar HRP musuh biar damage masuk dari jarak jauh
+task.spawn(function()
+    local orig = {}
+    while task.wait(0.3) do
+        if BF.HitboxExpand then
+            local ok, enemies = pcall(function() return workspace:FindFirstChild("Enemies") end)
+            if ok and enemies then
+                for _, v in ipairs(enemies:GetChildren()) do
+                    local h = v:FindFirstChildOfClass("Humanoid")
+                    local p = v:FindFirstChild("HumanoidRootPart")
+                    if h and p and h.Health > 0 then
+                        if not orig[p] then
+                            orig[p] = { size = p.Size, trans = p.Transparency }
+                        end
+                        local s = BF.HitboxSize
+                        p.Size = Vector3.new(s, s, s)
+                        p.Transparency = 0.7
+                        p.CanCollide = false
+                    end
+                end
+            end
+        else
+            for p, o in pairs(orig) do
+                if p and p.Parent then
+                    p.Size = o.size
+                    p.Transparency = o.trans
+                end
+            end
+            orig = {}
         end
     end
 end)
@@ -4329,6 +4364,10 @@ safeTab("Farm", function()
         "Ketinggian melayang saat lock-on musuh")
     createToggle(pg, "Fast Attack", false, function(v) BF.FastAtk = v end,
         "Percepat animasi serangan & perbesar jangkauan hitbox")
+    createToggle(pg, "Hitbox Expand", false, function(v) BF.HitboxExpand = v end,
+        "Perbesar tubuh musuh biar damage masuk dari jarak jauh")
+    createSlider(pg, "Hitbox Size", 10, 100, 20, function(v) BF.HitboxSize = v end,
+        "Ukuran hitbox musuh saat Hitbox Expand aktif")
     sectionLabel(pg, "Auto Stats")
     createSlider(pg, "Poin Per Tambah", 1, 100, 1, function(v) BF.StatPoints = v end)
     createToggle(pg, "Stats Melee", false, function(v) BF.StatMelee = v end)
@@ -4949,6 +4988,7 @@ local function runCleanup()
         BF.FarmOn = false
         BF.AttackOn = false
         BF.FastAtk = false
+        BF.HitboxExpand = false
         if BF._restoreWrap then pcall(BF._restoreWrap) end
     end
     do
