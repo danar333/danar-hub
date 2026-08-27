@@ -2965,53 +2965,192 @@ local function goTo(cf)
     end
 end
 
--- FastAttack: paksa kecepatan animasi serangan ke 65x saat aktif (trik inti Alchemy)
+-- ===== Attack System (Alchemy Delta-compatible) =====
+-- Disable camera shake
 do
-    -- ponytail: timeout WAJIB — WaitForChild tanpa timeout bikin script
-    -- menggantung selamanya kalau nama internal berubah pas game update
-    local okRig, RigLib = pcall(function()
-        local cf = game:GetService("ReplicatedStorage"):WaitForChild("CombatFramework", 9)
-        return cf and cf:WaitForChild("RigLib", 9) and require(cf.RigLib)
+    local ok, kkii = pcall(function()
+        return require(game:GetService("ReplicatedStorage").Util.CameraShaker)
     end)
-    if okRig and type(RigLib) == "table" and RigLib.wrapAttackAnimationAsync then
-        local oldWrap = RigLib.wrapAttackAnimationAsync
-        RigLib.wrapAttackAnimationAsync = function(a, b, c, d, func)
-            if BF.FastAtk then
-                return oldWrap(a, b, c, 65, func)
-            end
-            return oldWrap(a, b, c, d, func)
-        end
-        BF._restoreWrap = function() RigLib.wrapAttackAnimationAsync = oldWrap end
-    end
+    if ok and kkii and kkii.Stop then pcall(kkii.Stop, kkii) end
 end
 
-local function getController()
+-- CombatFramework modules
+local PC, RL, DMG, RigC, Combat = nil, nil, nil, nil, nil
+do
     local ps = player:FindFirstChild("PlayerScripts")
-    local mod = ps and ps:FindFirstChild("CombatFramework")
-    if not mod then return nil end
-    local ok, cf = pcall(require, mod)
-    if not ok or type(cf) ~= "table" then return nil end
-    if getupvalue then
-        local ok2, c = pcall(getupvalue, cf, 2)
-        if ok2 and type(c) == "table" and c.attack then return c end
-    end
-    if type(cf.activeController) == "table" then return cf.activeController end
-    return nil
+    local ok1, _pc = pcall(function() return require(ps.CombatFramework.Particle) end)
+    if ok1 then PC = _pc end
+    local ok2, _rl = pcall(function() return require(game:GetService("ReplicatedStorage").CombatFramework.RigLib) end)
+    if ok2 then RL = _rl end
+    local ok3, _dmg = pcall(function() return require(ps.CombatFramework.Particle.Damage) end)
+    if ok3 then DMG = _dmg end
+    local ok4, _rc = pcall(function() return getupvalue and getupvalue(require(ps.CombatFramework.RigController), 2) end)
+    if ok4 then RigC = _rc end
+    local ok5, _c = pcall(function() return getupvalue and getupvalue(require(ps.CombatFramework), 2) end)
+    if ok5 then Combat = _c end
 end
 
-bind(RunService.Heartbeat:Connect(function()
+-- RigControllerEvent (remote serangan BF)
+local RigEvent = nil
+do
+    local ok, rs = pcall(function() return game:GetService("ReplicatedStorage"):WaitForChild("RigControllerEvent", 5) end)
+    if ok then RigEvent = rs end
+end
+
+-- canHits: daftar HRP musuh dalam 65 stud
+local canHits = {}
+local function updateCanHits()
+    table.clear(canHits)
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local ok, enemies = pcall(function() return workspace:FindFirstChild("Enemies") end)
+    if ok and enemies then
+        for _, v in ipairs(enemies:GetChildren()) do
+            local h = v:FindFirstChildOfClass("Humanoid")
+            local p = v:FindFirstChild("HumanoidRootPart")
+            if h and p and h.Health > 0 and (p.Position - root.Position).Magnitude < 65 then
+                canHits[#canHits + 1] = p
+            end
+        end
+    end
+    -- tambah mob dari CollectionService ActiveRig tag
+    pcall(function()
+        local tagged = game:GetService("CollectionService"):GetTagged("ActiveRig")
+        for i = 1, #tagged do
+            local v = tagged[i]
+            if v ~= char then
+                local h = v:FindFirstChildOfClass("Humanoid")
+                local p = v:FindFirstChild("HumanoidRootPart")
+                if h and p and h.Health > 0 and (p.Position - root.Position).Magnitude < 65 then
+                    canHits[#canHits + 1] = p
+                end
+            end
+        end
+    end)
+end
+
+-- Update canHits setiap 0.075 detik
+task.spawn(function()
+    while task.wait(0.075) do
+        pcall(updateCanHits)
+    end
+end)
+
+-- Override wrapAttackAnimationAsync untuk speed boost
+do
+    if RL and RL.wrapAttackAnimationAsync then
+        local oldWrap = RL.wrapAttackAnimationAsync
+        if not shared._origWrap then shared._origWrap = oldWrap end
+        if not shared._origPlay then shared._origPlay = PC and PC.play end
+        if not shared._origDmg then shared._origDmg = DMG and DMG.new end
+        if not shared._origAttack then shared._origAttack = RigC and RigC.attack end
+
+        RL.wrapAttackAnimationAsync = function(a, b, c, d, func)
+            if BF.FastAtk then
+                if PC and shared._origPlay then PC.play = shared._origPlay end
+                return shared._origWrap(a, b, c, 65, func)
+            end
+            if BF.FastAtk and canHits and #canHits > 0 then
+                if PC then PC.play = function() end end
+                a:Play(0.00075, 0.01, 0.01)
+                func(canHits)
+                task.wait(a.Length * 0.5)
+                a:Stop()
+            end
+            return shared._origWrap(a, b, c, d, func)
+        end
+        BF._restoreWrap = function()
+            RL.wrapAttackAnimationAsync = oldWrap
+        end
+    end
+end
+
+-- Force reset Stun & Busy setiap frame (Alchemy trick)
+bind(RunService.RenderStepped:Connect(function()
     if not BF.AttackOn then return end
-    local ctrl = getController()
-    BF._ctrlOK = (ctrl ~= nil)
-    if ctrl and ctrl.equipped then
+    pcall(function()
+        local char = player.Character
+        if char then
+            if char:FindFirstChild("Stun") then char.Stun.Value = 0 end
+            if char:FindFirstChild("Busy") then char.Busy.Value = false end
+        end
+    end)
+end))
+
+-- Main attack loop
+task.spawn(function()
+    local lastFireValid = 0
+    local AttackCD = 0
+    local maxLag = 350
+    local tryLag = 0
+    local fucker = 0.0000007
+    while task.wait() do
         pcall(function()
-            ctrl.timeToNextAttack = 0
-            ctrl.increment = BF.FastAtk and 1 or 0
-            ctrl.hitboxMagnitude = BF.FastAtk and 100 or 65
-            task.spawn(function() pcall(ctrl.attack, ctrl) end)
+            if not BF.AttackOn then return end
+            if #canHits <= 0 then return end
+
+            local ctrl = Combat and Combat.activeController
+            BF._ctrlOK = (ctrl ~= nil)
+
+            if ctrl and ctrl.equipped and ctrl.currentWeaponModel then
+                local char = player.Character
+                local busy = char and char:FindFirstChild("Busy") and char.Busy.Value
+                local stun = char and char:FindFirstChild("Stun") and char.Stun.Value
+                if busy or (stun and stun > 0) then return end
+
+                if BF.FastAtk then
+                    -- reset cooldown jika perlu
+                    if tick() > AttackCD then
+                        local wname = ctrl.currentWeaponModel.Name
+                        local cd = { combat = 0.07 }
+                        AttackCD = tick() + (fucker or cd[wname:lower()] or 0.285) + ((tryLag / maxLag) * 0.3)
+                        if RigEvent then pcall(function() RigEvent:FireServer(RigEvent, "weaponChange", wname) end) end
+                        tryLag = tryLag + 1
+                        task.delay((fucker or 0.285) + (tryLag + 0.5 / maxLag) * 0.3, function()
+                            tryLag = tryLag - 1
+                        end)
+                    end
+
+                    if tick() - lastFireValid > 0.5 then
+                        ctrl.timeToNextAttack = 0
+                        ctrl.increment = 1
+                        ctrl.hitboxMagnitude = 65
+                        task.spawn(function() pcall(ctrl.attack, ctrl) end)
+                        lastFireValid = tick()
+                    end
+
+                    -- play animasi + fire remote "hit" langsung ke canHits
+                    local anims = ctrl.anims and ctrl.anims.basic
+                    local aid = anims and (anims[3] or anims[2])
+                    if aid then
+                        local anim = Instance.new("Animation")
+                        anim.AnimationId = aid
+                        local playing = ctrl.humanoid:LoadAnimation(anim)
+                        playing:Play(0.00075, 0.01, 0.01)
+                        if RigEvent then
+                            pcall(function()
+                                RigEvent:FireServer(RigEvent, "hit", canHits, anims[3] and 1 or 2, "")
+                            end)
+                        end
+                    end
+                else
+                    -- tanpa FastAtk: attack biasa + VirtualUser click
+                    ctrl.timeToNextAttack = 0
+                    ctrl.increment = 0
+                    ctrl.hitboxMagnitude = 65
+                    task.spawn(function() pcall(ctrl.attack, ctrl) end)
+                    pcall(function()
+                        local vu = game:GetService("VirtualUser")
+                        vu:CaptureController()
+                        vu:Button1Down(Vector2.new(1280, 672))
+                        vu:Button1Up(Vector2.new(1280, 672))
+                    end)
+                end
+            end
         end)
     end
-end))
+end)
 
 local function equipAnyWeapon()
     local char = player.Character
@@ -3129,23 +3268,16 @@ local function fightEnemy(v, quest)
         BF.NameMon = BF.NameMon or v.Name
         BF.StartMagnet = true
         BF.AttackOn = true
-        -- tween smooth ke dekat mob
-        local dist = (vp.Position - rp.Position).Magnitude
-        local cf = dist <= 10 and vp.CFrame * CFrame.new(0, 0, -3) or vp.CFrame * CFrame.new(0, 3, 0)
-        atween(cf)
-        -- disable collision musuh
+        -- tween ke posisi sesuai BF.Pos (atas mob sesuai slider)
+        atween(vp.CFrame * BF.Pos)
+        -- disable collision musuh + SimulationRadius
         pcall(function()
             vp.CanCollide = false
             vh.WalkSpeed = 0
+            vh:ChangeState(14)
             local vhead = v:FindFirstChild("Head")
             if vhead then vhead.CanCollide = false end
-        end)
-        -- click spam (backup untuk executor yang support VirtualUser)
-        pcall(function()
-            local vu = game:GetService("VirtualUser")
-            vu:CaptureController()
-            vu:Button1Down(Vector2.new(1280, 672))
-            vu:Button1Up(Vector2.new(1280, 672))
+            pcall(sethiddenproperty, player, "SimulationRadius", math.huge)
         end)
     until not BF.FarmOn
         or not v.Parent
@@ -3193,7 +3325,7 @@ task.spawn(function()
     end
 end)
 
--- magnet: bring musuh ke posisi target dengan isnetworkowner + radius check
+-- magnet: bring musuh ke posisi target + SimulationRadius + ChangeState
 task.spawn(function()
     while task.wait() do
         if BF.FarmOn and BF.StartMagnet and BF.NameMon and BF.PosMon then
@@ -3211,10 +3343,13 @@ task.spawn(function()
                         if h and p and h.Health > 0 then
                             local d = (p.Position - root.Position).Magnitude
                             if d <= bringRadius then
-                                local ok, isn = pcall(function() return isnetworkowner(p) end)
-                                if ok and isn then
-                                    p.CFrame = BF.PosMon
-                                end
+                                p.CFrame = BF.PosMon
+                                p.Size = Vector3.new(50, 50, 50)
+                                p.CanCollide = false
+                                h:ChangeState(14)
+                                local head = v:FindFirstChild("Head")
+                                if head then head.CanCollide = false end
+                                pcall(sethiddenproperty, player, "SimulationRadius", math.huge)
                             end
                         end
                     end
@@ -3224,7 +3359,7 @@ task.spawn(function()
     end
 end)
 
--- Hitbox expansion: perbesar HRP musuh biar damage masuk dari jarak jauh
+-- Hitbox expansion: perbesar HRP musuh + SimulationRadius supaya damage masuk dari jarak jauh
 task.spawn(function()
     local orig = {}
     while task.wait(0.3) do
@@ -3236,7 +3371,7 @@ task.spawn(function()
                     local p = v:FindFirstChild("HumanoidRootPart")
                     if h and p and h.Health > 0 then
                         if not orig[p] then
-                            orig[p] = { size = p.Size, trans = p.Transparency }
+                            orig[p] = { size = p.Size, trans = p.Transparency, cc = p.CanCollide }
                         end
                         local s = BF.HitboxSize
                         p.Size = Vector3.new(s, s, s)
@@ -3245,11 +3380,13 @@ task.spawn(function()
                     end
                 end
             end
+            pcall(sethiddenproperty, player, "SimulationRadius", math.huge)
         else
             for p, o in pairs(orig) do
                 if p and p.Parent then
                     p.Size = o.size
                     p.Transparency = o.trans
+                    p.CanCollide = o.cc
                 end
             end
             orig = {}
