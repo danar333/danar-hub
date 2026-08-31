@@ -53,9 +53,9 @@ local THEMES = {
 local currentTheme = "Midnight Purple"
 local THEME_BGS = {
     ["Midnight Purple"] = "https://i.postimg.cc/XqChb1SF/hayo.jpg",
-    ["Crimson Demon"]   = "https://i.postimg.cc/XqChb1SF/hayo.jpg",
-    ["Aqua Neon"]       = "https://i.postimg.cc/Y0V7nP8d/aqua.jpg",
-    ["Sunset Orange"]   = "https://i.postimg.cc/XqChb1SF/hayo.jpg",
+    ["Crimson Demon"]   = "https://i.postimg.cc/XvpY8wVV/Itachi.jpg",
+    ["Aqua Neon"]       = "https://i.postimg.cc/x8k81M4b/Aqua-Sky.jpg",
+    ["Sunset Orange"]   = "https://i.postimg.cc/MprWvv1B/Sukuna.jpg",
 }
 local function applyTheme(name)
     local t = THEMES[name]
