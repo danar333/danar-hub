@@ -58,27 +58,70 @@ local function applyTheme(name)
     for k,v in pairs(THEME) do old[k]=v end
     for k,v in pairs(t) do THEME[k]=v end
     currentTheme = name
+    local function dist(a,b) local dr=a.R-b.R; local dg=a.G-b.G; local db=a.B-b.B; return math.sqrt(dr*dr+dg*dg+db*db) end
+    local function closest(oldCol)
+        local bestK, bestD = nil, 1e9
+        for k,c in pairs(old) do
+            local d = dist(c, oldCol)
+            if d < bestD then bestD=d; bestK=k end
+        end
+        return bestK, bestD
+    end
     pcall(function()
         local gui = game:GetService("CoreGui"):FindFirstChild("DanarHubGui")
-            or player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild("DanarHubGui")
+            or (player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild("DanarHubGui"))
         if not gui then return end
         for _, inst in ipairs(gui:GetDescendants()) do
-            for k, oldCol in pairs(old) do
-                local newCol = THEME[k]
-                if inst:IsA("GuiObject") and inst.BackgroundColor3 == oldCol then
-                    inst.BackgroundColor3 = newCol
+            -- pill toggle khusus: size 40x22 + punya knob
+            if inst:IsA("TextButton") and inst.Size == UDim2.fromOffset(40,22) then
+                local knob = inst:FindFirstChildOfClass("Frame")
+                local isOn = knob and knob.Position.X.Scale > 0.5
+                inst.BackgroundColor3 = isOn and THEME.Accent or THEME.Off
+            elseif inst:IsA("Frame") and inst:FindFirstChildOfClass("Frame") and inst.Size.Y.Offset==5 then
+                -- slider track
+                inst.BackgroundColor3 = THEME.Track
+                for _, ch in ipairs(inst:GetChildren()) do
+                    if ch:IsA("Frame") and ch.BackgroundColor3 then
+                        -- fill
+                        local k,d = closest(ch.BackgroundColor3)
+                        if k=="Accent" or d<0.15 then ch.BackgroundColor3 = THEME.Accent end
+                    end
                 end
-                if (inst:IsA("TextLabel") or inst:IsA("TextButton")) and inst.TextColor3 == oldCol then
-                    inst.TextColor3 = newCol
+            else
+                if inst:IsA("GuiObject") then
+                    -- skip putih knob/slider
+                    if not (inst.BackgroundColor3.R>0.98 and inst.BackgroundColor3.G>0.98 and inst.BackgroundColor3.B>0.98) then
+                        local k,d = closest(inst.BackgroundColor3)
+                        if k and (d < 0.12 or k=="Accent" or k=="Accent2") then inst.BackgroundColor3 = THEME[k] end
+                    end
                 end
-                if inst:IsA("UIStroke") and inst.Color == oldCol then
-                    inst.Color = newCol
+                if (inst:IsA("TextLabel") or inst:IsA("TextButton")) then
+                    -- jangan ubah putih knob (1,1,1)
+                    if not (inst.TextColor3.R>0.98 and inst.TextColor3.G>0.98 and inst.TextColor3.B>0.98) then
+                        local k,d = closest(inst.TextColor3)
+                        if k and (d < 0.12 or k=="Accent" or k=="Accent2") then inst.TextColor3 = THEME[k] end
+                    end
                 end
-                if inst:IsA("ScrollingFrame") and inst.ScrollBarImageColor3 == oldCol then
-                    inst.ScrollBarImageColor3 = newCol
+                if inst:IsA("UIStroke") then
+                    local k,d = closest(inst.Color)
+                    if k and (d < 0.22 or k=="Accent" or k=="Accent2") then inst.Color = THEME[k] end
+                end
+                if inst:IsA("ScrollingFrame") then
+                    inst.ScrollBarImageColor3 = THEME.Accent
+                end
+                if inst:IsA("TextLabel") and inst.Parent and inst.Parent:IsA("Frame") and inst.Text:find("FPS") then
+                    -- status labels keep SubText
                 end
             end
         end
+        -- paksa container utama
+        pcall(function()
+            for _, o in ipairs(gui:GetDescendants()) do
+                if o.Name=="Main" then o.BackgroundColor3 = THEME.Bg end
+                if o.Name=="TitleBar" then o.BackgroundColor3 = THEME.Card end
+                if o.Name=="DanarPill" then o.BackgroundColor3 = THEME.Card end
+            end
+        end)
         if State and State._fovCircle then
             pcall(function() State._fovCircle.Color = THEME.Accent end)
             State.AimFOVColor = THEME.Accent
@@ -2616,7 +2659,7 @@ if not IS_BF then
     end)
 
     sectionLabel(pg, "Aimbot")
-    createToggle(pg, "Target Lock", false, function(v)
+    createToggle(pg, "AimLock", false, function(v)
         State.AimOn = v
         if v then
             enableFOVCircle()
