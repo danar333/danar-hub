@@ -1478,6 +1478,28 @@ task.spawn(function()
     warn("[Danar Hub] Semua jalur background gagal, isi CUSTOM_BG_URL")
 end)
 
+-- preload semua background tema di awal (cache), biar ganti tema instan
+if THEME_BGS and writefile and getcustomasset then
+    local function ensureCached(url)
+        if url == "" or not isfile then return end
+        local h = 5381
+        for i = 1, #url do h = (h * 33 + string.byte(url, i)) % 16777216 end
+        local cacheName = "danarhub_bg_" .. string.format("%x", h) .. ".png"
+        if isfile(cacheName) then return end
+        local okDl, body = pcall(function() return game:HttpGet(url) end)
+        if okDl and body and #body > 0 then
+            pcall(writefile, cacheName, body)
+        end
+    end
+    local seen = {}
+    for _, url in pairs(THEME_BGS) do
+        if url ~= "" and not seen[url] then
+            seen[url] = true
+            task.spawn(ensureCached, url)
+        end
+    end
+end
+
 local titleBar = Instance.new("Frame")
 titleBar.Name             = "TitleBar"
 titleBar.Size             = UDim2.new(1, 0, 0, 48)
