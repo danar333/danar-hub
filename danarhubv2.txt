@@ -51,6 +51,12 @@ local THEMES = {
     },
 }
 local currentTheme = "Midnight Purple"
+local THEME_BGS = {
+    ["Midnight Purple"] = "https://i.postimg.cc/XqChb1SF/hayo.jpg",
+    ["Crimson Demon"]   = "https://i.postimg.cc/XqChb1SF/hayo.jpg",
+    ["Aqua Neon"]       = "https://i.postimg.cc/Y0V7nP8d/aqua.jpg",
+    ["Sunset Orange"]   = "https://i.postimg.cc/XqChb1SF/hayo.jpg",
+}
 local function applyTheme(name)
     local t = THEMES[name]
     if not t then return end
@@ -140,6 +146,32 @@ local function applyTheme(name)
         if State and State._fovCircle then
             pcall(function() State._fovCircle.Color = THEME.Accent end)
             State.AimFOVColor = THEME.Accent
+        end
+        -- ganti background per tema
+        local bgUrl = THEME_BGS and THEME_BGS[name]
+        if bgUrl and bgUrl ~= "" then
+            CUSTOM_BG_URL = bgUrl
+            local bg = _G.DanarBgImage or (gui and gui:FindFirstChild("Main", true) and gui.Main:FindFirstChildOfClass("ImageLabel"))
+            if bg then
+                task.spawn(function()
+                    local url = bgUrl
+                    local h = 5381
+                    for i=1,#url do h=(h*33+string.byte(url,i))%16777216 end
+                    local cacheName = "danarhub_bg_"..string.format("%x", h)..".png"
+                    if isfile and isfile(cacheName) then
+                        local okC, cached = pcall(getcustomasset, cacheName)
+                        if okC and cached then pcall(function() bg.Image = cached end) return end
+                    end
+                    local okDl, body = pcall(function() return game:HttpGet(url) end)
+                    if okDl and body and #body>0 and writefile and getcustomasset then
+                        pcall(writefile, cacheName, body)
+                        local okA, asset = pcall(getcustomasset, cacheName)
+                        if okA and asset then pcall(function() bg.Image = asset end) return end
+                    end
+                    -- fallback: coba set langsung (executor tertentu support)
+                    pcall(function() bg.Image = url end)
+                end)
+            end
         end
     end)
 end
@@ -1381,6 +1413,7 @@ bgImage.ImageTransparency = 0.05
 bgImage.ZIndex            = 2
 bgImage.Parent            = main
 round(bgImage, 12)
+_G.DanarBgImage = bgImage
 
 local bgGradient = Instance.new("Frame")
 bgGradient.Size             = UDim2.fromScale(1, 1)
