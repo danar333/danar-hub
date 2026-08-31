@@ -68,9 +68,24 @@ local function applyTheme(name)
         return bestK, bestD
     end
     pcall(function()
-        local gui = game:GetService("CoreGui"):FindFirstChild("DanarHubGui")
-            or (player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild("DanarHubGui"))
-        if not gui then return end
+        local gui
+        -- 1. CoreGui
+        pcall(function() gui = game:GetService("CoreGui"):FindFirstChild("DanarHubGui") end)
+        -- 2. PlayerGui
+        if not gui or not gui.Parent then pcall(function() gui = player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild("DanarHubGui") end) end
+        -- 3. gethui (executor hidden)
+        if (not gui or not gui.Parent) and gethui then pcall(function() local h=gethui(); if h then gui = h:FindFirstChild("DanarHubGui") end end) end
+        -- 4. fallback scan all
+        if not gui or not gui.Parent then
+            pcall(function()
+                for _,v in ipairs(game:GetService("CoreGui"):GetChildren()) do if v.Name=="DanarHubGui" then gui=v break end end
+            end)
+        end
+        if not gui or not gui.Parent then
+            -- last try: cari lewat screenGui global jika ada
+            pcall(function() if _G.DanarHubGui then gui=_G.DanarHubGui end end)
+        end
+        if not gui or not gui.Parent then return end
         for _, inst in ipairs(gui:GetDescendants()) do
             -- pill toggle khusus: size 40x22 + punya knob
             if inst:IsA("TextButton") and inst.Size == UDim2.fromOffset(40,22) then
@@ -1301,6 +1316,7 @@ screenGui.ZIndexBehavior   = Enum.ZIndexBehavior.Sibling
 screenGui.DisplayOrder     = 999999
 pcall(function() screenGui.Parent = hostGui end)
 if not screenGui.Parent then screenGui.Parent = player:WaitForChild("PlayerGui") end
+_G.DanarHubGui = screenGui
 
 local function round(inst, r)
     local c = Instance.new("UICorner")
