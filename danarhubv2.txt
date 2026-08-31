@@ -52,7 +52,7 @@ local THEMES = {
 }
 local currentTheme = "Midnight Purple"
 local THEME_BGS = {
-    ["Midnight Purple"] = "https://i.postimg.cc/XqChb1SF/hayo.jpg",
+    ["Midnight Purple"] = "https://i.postimg.cc/RC82YywQ/gojo-Purple.jpg",
     ["Crimson Demon"]   = "https://i.postimg.cc/XvpY8wVV/Itachi.jpg",
     ["Aqua Neon"]       = "https://i.postimg.cc/x8k81M4b/Aqua-Sky.jpg",
     ["Sunset Orange"]   = "https://i.postimg.cc/MprWvv1B/Sukuna.jpg",
@@ -1395,7 +1395,7 @@ end
 updateScale()
 bind(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale))
 
-local CUSTOM_BG_URL = "https://i.postimg.cc/XqChb1SF/hayo.jpg"
+local CUSTOM_BG_URL = "https://i.postimg.cc/RC82YywQ/gojo-Purple.jpg"
 local BG_THUMBS = {
     "rbxthumb://type=Asset&id=3290453459&w=420&h=420",
     "rbxthumb://type=Asset&id=3343076822&w=420&h=420",
