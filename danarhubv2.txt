@@ -590,53 +590,46 @@ local function applyAvatarMimic(userId)
     if not dstChar or not dstHum then warn("[Mimic] dst tidak siap") return end
     saveOriginalAppearance()
     avatarMimicTargetId = userId
-    -- coba primary: desc live dari target hum (paling presisi)
-    do
-        local okDesc, liveDesc = pcall(function()
-            local th = targetPlr.Character and targetPlr.Character:FindFirstChildOfClass("Humanoid")
-            return th and th:GetAppliedDescription()
-        end)
-        if okDesc and liveDesc then
-            pcall(function() dstHum:ApplyDescription(liveDesc) end)
-            -- verifikasi body kebentuk? kalau sudah, tetap lanjut clone untuk amankan accessory yang mungkin ke-skip
-        end
-    end
-    -- hapus clothes/accessories lama dst
+    -- sumber body sempurna: perfectModel via CreateHumanoidModelFromUserIdAsync
+    local perfectModel = nil
+    pcall(function()
+        local okM, m = pcall(function() return Players:CreateHumanoidModelFromUserIdAsync(userId) end)
+        if okM and m then perfectModel = m end
+    end)
+    local srcForBody = perfectModel or srcChar
     for _,v in ipairs(dstChar:GetChildren()) do
-        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then v:Destroy() end
+        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") or v:IsA("WrapLayer") or v.Name:find("Layer") then v:Destroy() end
     end
-    -- clone dari src (aksesori semua tipe)
     for _,v in ipairs(srcChar:GetChildren()) do
-        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") or v:IsA("BodyColors") or v:IsA("CharacterMesh") then
+        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") or v:IsA("CharacterMesh") then
             local cl = v:Clone()
             cl.Parent = dstChar
         end
-        if v.Name=="Head" then
-            for _,dec in ipairs(v:GetChildren()) do if dec:IsA("Decal") or dec:IsA("Texture") then
-                local hHead = dstChar:FindFirstChild("Head")
-                if hHead then
-                    -- hapus decal lama dulu biar tidak dobel
-                    for _,old in ipairs(hHead:GetChildren()) do if old:IsA("Decal") and old.Texture==dec.Texture then old:Destroy() end end
-                    local c=dec:Clone(); c.Parent=hHead
-                end
-            end end
+    end
+    if perfectModel then
+        for _,v in ipairs(perfectModel:GetChildren()) do
+            if v:IsA("Accessory") then
+                local exists=false
+                for _,ex in ipairs(dstChar:GetChildren()) do if ex:IsA("Accessory") and ex.Name==v.Name then exists=true break end end
+                if not exists then local cl=v:Clone(); cl.Parent=dstChar end
+            end
         end
     end
-    -- copy BodyColors values
-    local srcBC = srcChar:FindFirstChildOfClass("BodyColors") or srcChar:FindFirstChild("Body Colors")
-    local dstBC = dstChar:FindFirstChildOfClass("BodyColors")
-    if srcBC and dstBC then
-        pcall(function()
-            dstBC.HeadColor3 = srcBC.HeadColor3
-            dstBC.TorsoColor3 = srcBC.TorsoColor3
-            dstBC.LeftArmColor3 = srcBC.LeftArmColor3
-            dstBC.RightArmColor3 = srcBC.RightArmColor3
-            dstBC.LeftLegColor3 = srcBC.LeftLegColor3
-            dstBC.RightLegColor3 = srcBC.RightLegColor3
-        end)
+    do
+        local srcBC = (perfectModel and perfectModel:FindFirstChildOfClass("BodyColors")) or srcChar:FindFirstChildOfClass("BodyColors")
+        local dstBC = dstChar:FindFirstChildOfClass("BodyColors")
+        if srcBC and dstBC then
+            pcall(function()
+                dstBC.HeadColor3 = srcBC.HeadColor3
+                dstBC.TorsoColor3 = srcBC.TorsoColor3
+                dstBC.LeftArmColor3 = srcBC.LeftArmColor3
+                dstBC.RightArmColor3 = srcBC.RightArmColor3
+                dstBC.LeftLegColor3 = srcBC.LeftLegColor3
+                dstBC.RightLegColor3 = srcBC.RightLegColor3
+            end)
+        end
     end
-    -- copy body meshes (Head/Torso/Limbs) full set + layered
-    for _,part in ipairs(srcChar:GetChildren()) do
+    for _,part in ipairs(srcForBody:GetChildren()) do
         if part:IsA("BasePart") then
             local dp = dstChar:FindFirstChild(part.Name)
             if dp then
@@ -657,54 +650,40 @@ local function applyAvatarMimic(userId)
                         else
                             local cl = sm:Clone(); cl.Parent = dp
                         end
+                    else
+                        local dsm = dp:FindFirstChildOfClass("SpecialMesh")
+                        if dsm then dsm:Destroy() end
                     end
                     dp.Size = part.Size
-                    -- wrap layer untuk layered clothing (R15)
                     for _,wl in ipairs(part:GetChildren()) do
-                        if wl:IsA("WrapLayer") then
+                        if wl:IsA("WrapLayer") or wl:IsA("WrapTarget") then
                             local dwl = dp:FindFirstChild(wl.Name)
-                            if not dwl then dwl = wl:Clone(); dwl.Parent = dp end
+                            if dwl then dwl:Destroy() end
+                            local cl = wl:Clone(); cl.Parent = dp
                         end
                     end
                 end)
             end
         end
     end
-    -- copy WrapLayer / PantsLayer yang nempel di char (layered)
-    for _,v in ipairs(srcChar:GetChildren()) do
-        if v:IsA("WrapLayer") or v.Name:find("Layer") then
+    for _,v in ipairs(srcForBody:GetChildren()) do
+        if v:IsA("WrapLayer") or v:IsA("WrapTarget") then
             pcall(function()
                 local cl = v:Clone(); cl.Parent = dstChar
             end)
         end
     end
-    -- copy Humanoid scales + face
     pcall(function()
-        local sHum = srcChar:FindFirstChildOfClass("Humanoid")
+        local sHum = (perfectModel and perfectModel:FindFirstChildOfClass("Humanoid")) or srcChar:FindFirstChildOfClass("Humanoid")
         if sHum then
             for _,nm in ipairs({"BodyHeightScale","BodyWidthScale","BodyDepthScale","HeadScale","BodyTypeScale","ProportionScale"}) do
                 local sv = sHum:FindFirstChild(nm)
                 local dv = dstHum:FindFirstChild(nm)
                 if sv and dv then dv.Value = sv.Value end
             end
-            -- face texture via Head decal
-            local sHead = srcChar:FindFirstChild("Head")
-            local dHead = dstChar:FindFirstChild("Head")
-            if sHead and dHead then
-                for _,dec in ipairs(sHead:GetChildren()) do
-                    if dec:IsA("Decal") and dec.Texture:find("face") or dec.Name:lower():find("face") then
-                        for _,ddec in ipairs(dHead:GetChildren()) do if ddec:IsA("Decal") then ddec.Texture = dec.Texture end end
-                    end
-                end
-            end
         end
     end)
-    -- fallback ApplyDescription juga
-    pcall(function()
-        local ok, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(userId) end)
-        if ok and desc then pcall(function() dstHum:ApplyDescription(desc) end) end
-    end)
-end
+    if perfectModel then pcall(function() perfectModel:Destroy() end) end
 local function clearAvatarMimic()
     avatarMimicTargetId = nil
     local char = player.Character
