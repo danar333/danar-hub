@@ -1084,13 +1084,15 @@ local function setSkybox(name)
     skyObj = sky
 end
 -- Music player (ponytail: 1 Sound object di PlayerGui, loop)
+-- id dibawah dari APMOfficial (verified, public, aman dipakai non-producer-copy)
 local MUSIC_LIST = {
-    ["Lofi Chill"]  = "rbxassetid://1837846974",
-    ["Synthwave"]   = "rbxassetid://6329625489",
-    ["Phonk"]       = "rbxassetid://9042231581",
-    ["Night Drive"] = "rbxassetid://6220544288",
-    ["Epic Beat"]   = "rbxassetid://1297725940",
-}
+    ["Lofi Chill"]    = "rbxassetid://1837846974",
+    ["Morning Mood"]  = "rbxassetid://1846088038",
+    ["Crab Rave"]     = "rbxassetid://5410086218",
+    ["Classic Easter"]= "rbxassetid://1836009208",
+    ["Science Mystery"]="rbxassetid://1840776993",
+    ["Four Seasons"]  = "rbxassetid://9045766074",
+} -- ponytail: verified public audio (APMOfficial etc), bukan reupload pribadi yg sering mati
 local musicSound = nil
 local currentSong = "Lofi Chill"
 local function getMusicSound()
