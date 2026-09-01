@@ -1008,10 +1008,10 @@ local function clearTracers()
 end
 local SKY_PRESETS = {
     ["Default"] = nil,
-    ["Sunset"] = "rbxassetid://12064107",
-    ["Night Stars"] = "rbxassetid://12064152",
-    ["Aqua Sky"] = "rbxassetid://81396730",
-    ["Purple Dusk"] = "rbxassetid://12064107",
+    ["Red Night"] = "rbxassetid://5834531764",
+    ["Space Cloud"] = "rbxassetid://166574882",
+    ["Sunset"] = "rbxassetid://627302570",
+    ["Cloud Sky"] = "rbxassetid://17480150596",
 }
 local skyObj = nil
 local function setSkybox(name)
@@ -3057,7 +3057,7 @@ if not IS_BF then
         end
     end)
     createToggle(pg, "Tracers", false, function(v) setTracers(v) end)
-    createDropdown(pg, "Skybox", {"Default","Sunset","Night Stars","Aqua Sky","Purple Dusk"}, 1, function(v) setSkybox(v) end)
+    createDropdown(pg, "Skybox", {"Default","Red Night","Space Cloud","Sunset","Cloud Sky"}, 1, function(v) setSkybox(v) end)
     createToggle(pg, "Fullbright", false, function(v) State.Fullbright = v setFullbright(v) end)
     createSlider(pg, "Field of View", 70, 120, 70, function(v) State.FOV = v setFOV(v) end)
 end
