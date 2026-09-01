@@ -1008,11 +1008,11 @@ local function clearTracers()
 end
 local SKY_PRESETS = {
     ["Default"] = nil,
-    ["Red Night"] = "rbxassetid://12064152",
-    ["Space Cloud"] = "rbxassetid://81396730",
-    ["Sunset"] = "rbxassetid://12064107",
-    ["Cloud Sky"] = "rbxassetid://81396730",
-} -- ponytail: balik ke image id yang terbukti work (pertama)
+    ["Red Night"] = "rbxassetid://5834531764",
+    ["Space Cloud"] = "rbxassetid://166574882",
+    ["Sunset"] = "rbxassetid://627302570",
+    ["Cloud Sky"] = "rbxassetid://17480150596",
+} -- ponytail: pakai model id skybox (6 sisi seamless) + fallback image kalau GetObjects block
 local skyObj = nil
 local skyOrig = nil
 local function setSkybox(name)
