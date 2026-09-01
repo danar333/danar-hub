@@ -1045,16 +1045,42 @@ local function setSkybox(name)
         skyObj = sky
         return
     end
-    local id = SKY_PRESETS[name]
-    if not id or id=="" then return end
-    sky.SkyboxBk = id
-    sky.SkyboxDn = id
-    sky.SkyboxFt = id
-    sky.SkyboxLf = id
-    sky.SkyboxRt = id
-    sky.SkyboxUp = id
-    sky.SunAngularSize = 21
-    sky.SunTextureId = "rbxassetid://1084354320"
+    local raw = SKY_PRESETS[name]
+    if not raw or raw=="" then return end
+    -- coba load sebagai model skybox (id model seperti 5834531764), kalau gagal pakai sebagai image langsung
+    local applied = false
+    pcall(function()
+        -- raw = "rbxassetid://5834531764" -> ambil angka
+        local num = raw:match("%d+")
+        if num then
+            local objs = game:GetObjects("rbxassetid://"..num)
+            if objs and objs[1] then
+                local s = objs[1]:FindFirstChildOfClass("Sky")
+                if not s and objs[1]:IsA("Sky") then s = objs[1] end
+                if s and s:IsA("Sky") then
+                    sky.SkyboxBk = s.SkyboxBk
+                    sky.SkyboxDn = s.SkyboxDn
+                    sky.SkyboxFt = s.SkyboxFt
+                    sky.SkyboxLf = s.SkyboxLf
+                    sky.SkyboxRt = s.SkyboxRt
+                    sky.SkyboxUp = s.SkyboxUp
+                    sky.SunAngularSize = s.SunAngularSize
+                    sky.SunTextureId = s.SunTextureId
+                    applied = true
+                end
+            end
+        end
+    end)
+    if not applied then
+        sky.SkyboxBk = raw
+        sky.SkyboxDn = raw
+        sky.SkyboxFt = raw
+        sky.SkyboxLf = raw
+        sky.SkyboxRt = raw
+        sky.SkyboxUp = raw
+        sky.SunAngularSize = 21
+        sky.SunTextureId = "rbxassetid://1084354320"
+    end
     skyObj = sky
 end
 local function setTracers(on)
