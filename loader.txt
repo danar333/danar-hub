@@ -1,4 +1,1 @@
--- Danar Hub v2 - Loader
--- Ganti URL_RAW_PASTEBIN dengan url raw pastebin yang berisi danarhubv2_min.txt
--- Contoh: https://pastebin.com/raw/XXXXXXX
-loadstring(game:HttpGet("URL_RAW_PASTEBIN"))()
+loadstring(game:HttpGet("https://pastebin.com/raw/DEPwDwD9"))()
