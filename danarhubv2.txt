@@ -188,6 +188,7 @@ local State = {
     AimPrediction = false, AimPredStr = 0.1,
     AimPart = "Head", AimHideFOV = false,
     AimFOVColor = Color3.fromRGB(255, 0, 255),
+    Tracers = false,
     Headless = false, Korblox = false,
     _prevTargetPos = nil,
     _fovCircle = nil,
@@ -995,6 +996,58 @@ local function disableFOVCircle()
         fovCircle = nil
     end
     State._fovCircle = nil
+end
+
+-- ponytail: Tracers (Visual)
+local tracerLines = {}
+local tracerConn = nil
+local function clearTracers()
+    for _,ln in pairs(tracerLines) do pcall(function() ln:Remove() end) end
+    tracerLines = {}
+    if tracerConn then tracerConn:Disconnect() tracerConn=nil end
+end
+local function setTracers(on)
+    State.Tracers = on
+    clearTracers()
+    if not on or not Drawing then return end
+    tracerConn = game:GetService("RunService").RenderStepped:Connect(function()
+        local cam = workspace.CurrentCamera
+        if not cam then return end
+        local center = Vector2.new(cam.ViewportSize.X*0.5, cam.ViewportSize.Y)
+        for _,pl in ipairs(game:GetService("Players"):GetPlayers()) do
+            if pl~=player and pl.Character then
+                local hrp = pl.Character:FindFirstChild("HumanoidRootPart")
+                local hum = pl.Character:FindFirstChildOfClass("Humanoid")
+                if hrp and hum and hum.Health>0 then
+                    local pos, onScreen = cam:WorldToViewportPoint(hrp.Position)
+                    local ln = tracerLines[pl.UserId]
+                    if not ln then
+                        ln = Drawing.new("Line")
+                        ln.Thickness = 1.5
+                        ln.Transparency = 1
+                        tracerLines[pl.UserId]=ln
+                    end
+                    ln.Color = THEME.Accent
+                    if onScreen then
+                        ln.From = center
+                        ln.To = Vector2.new(pos.X, pos.Y)
+                        ln.Visible = true
+                    else
+                        ln.Visible = false
+                    end
+                else
+                    local ln=tracerLines[pl.UserId]
+                    if ln then ln.Visible=false end
+                end
+            end
+        end
+        -- cleanup leavers
+        for uid,ln in pairs(tracerLines) do
+            local still=false
+            for _,pl in ipairs(game:GetService("Players"):GetPlayers()) do if pl.UserId==uid then still=true break end end
+            if not still then pcall(function() ln:Remove() end); tracerLines[uid]=nil end
+        end
+    end)
 end
 
 bind(RunService.RenderStepped:Connect(function(dt)
@@ -2975,6 +3028,7 @@ if not IS_BF then
             clearESP()
         end
     end)
+    createToggle(pg, "Tracers", false, function(v) setTracers(v) end)
     createToggle(pg, "Fullbright", false, function(v) State.Fullbright = v setFullbright(v) end)
     createSlider(pg, "Field of View", 70, 120, 70, function(v) State.FOV = v setFOV(v) end)
 end
