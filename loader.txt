@@ -1,1 +1,1 @@
-loadstring(game:HttpGet("https://pastebin.com/raw/DEPwDwD9"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/danar333/danar-hub/main/obf/v2.obf.txt"))()
