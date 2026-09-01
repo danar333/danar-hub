@@ -1008,11 +1008,11 @@ local function clearTracers()
 end
 local SKY_PRESETS = {
     ["Default"] = nil,
-    ["Red Night"] = "rbxassetid://1498276947",
-    ["Space Cloud"] = "rbxassetid://166059530",
+    ["Red Night"] = "rbxassetid://12064152",
+    ["Space Cloud"] = "rbxassetid://81396730",
     ["Sunset"] = "rbxassetid://12064107",
     ["Cloud Sky"] = "rbxassetid://81396730",
-} -- ponytail: 4 tema sky image (direct texture, bukan model id) biar ke-apply instan
+} -- ponytail: balik ke image id yang terbukti work (pertama)
 local skyObj = nil
 local skyOrig = nil
 local function setSkybox(name)
