@@ -2792,9 +2792,9 @@ if not IS_BF then
     createToggle(pg, "Anti Fling", false, function(v) setAntiFling(v) end)
     createToggle(pg, "Wall Hop Flick", false, function(v) flickBtn.Visible = v end)
     sectionLabel(pg, "Cosmetics")
-    createToggle(pg, "Headless (Local)", false, function(v) setHeadless(v) end, "Hanya terlihat olehmu, bukan pemain lain")
-    createToggle(pg, "Korblox Leg (Local)", false, function(v) setKorblox(v) end, "Hanya terlihat olehmu, bukan pemain lain")
-    sectionLabel(pg, "Avatar Mimic (Full Set)")
+    createToggle(pg, "Headless (Local)", false, function(v) setHeadless(v) end)
+    createToggle(pg, "Korblox Leg (Local)", false, function(v) setKorblox(v) end)
+    -- avatar mimic tetap di Cosmetics (gabung)
     do
         local mimicLabels={}
         local function buildMimicOptions()
