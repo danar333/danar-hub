@@ -1092,6 +1092,11 @@ local MUSIC_LIST = {
     ["Classic Easter"]= "rbxassetid://1836009208",
     ["Science Mystery"]="rbxassetid://1840776993",
     ["Four Seasons"]  = "rbxassetid://9045766074",
+    ["Crzy Larp Song"] = "rbxassetid://89068160573449",
+    ["Yuki Is Larp"]  = "rbxassetid://93192520113222",
+    ["Mono Larp 333"] = "rbxassetid://126967842691483",
+    ["Low Cortisol"]  = "rbxassetid://110919391228823",
+    ["Tender Static"] = "rbxassetid://139132289200391",
 } -- ponytail: verified public audio (APMOfficial etc), bukan reupload pribadi yg sering mati
 local musicSound = nil
 local currentSong = "Lofi Chill"
@@ -3188,11 +3193,11 @@ if not IS_BF then
     local songNames = {}
     for k in pairs(MUSIC_LIST) do table.insert(songNames, k) end
     table.sort(songNames)
-    createDropdown(pg, "Pilih Lagu", songNames, 1, function(v) currentSong = v; if musicSound and musicSound.Playing then playMusic() end end)
+    createDropdown(pg, "Select Music", songNames, 1, function(v) currentSong = v; if musicSound and musicSound.Playing then playMusic() end end)
     createToggle(pg, "Play / Stop", false, function(v) if v then playMusic() else stopMusic() end end)
     createSlider(pg, "Volume", 0, 100, 50, function(v) setMusicVolume(v/100) end)
     createButton(pg, "Stop Music", stopMusic)
-    createNote(pg, "Music cuma keluar di device sendiri (Sound client-side). Pakai id lain tinggal edit MUSIC_LIST.")
+
 end
 
 if IS_MM2 then
