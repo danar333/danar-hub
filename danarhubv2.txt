@@ -1699,7 +1699,7 @@ utag.ZIndex         = 8
 utag.Parent         = userPanel
 
 local tabLayout = Instance.new("UIListLayout")
-tabLayout.Padding    = UDim.new(0, 2)
+tabLayout.Padding    = UDim.new(0, 4) -- ponytail: rapih
 tabLayout.SortOrder  = Enum.SortOrder.LayoutOrder
 tabLayout.Parent     = tabHolder
 
@@ -1718,7 +1718,7 @@ local TAB_ICONS = {
     Utility = "□", Settings = "≡", MM2 = "●",
     Home = "★", Farm = "►", Raid = "♦", Event = "●",
     Teleport = "▼", ESP = "○", Setelan = "■", ["Farm Lain"] = "▪",
-}
+} -- ponytail: ikon distinct tapi satu family geometric, warna aktif konsisten
 
 local tabButtons, tabPages, tabLabels, tabIcons, tabChips = {}, {}, {}, {}, {}
 
@@ -1737,10 +1737,13 @@ local function selectTab(index)
     for i = 1, #tabButtons do
         local active = (i == index)
         local c = active and THEME.Accent or THEME.SubText
-        if tabLabels[i] then tabLabels[i].TextColor3 = c end
-        if tabIcons[i] then tabIcons[i].TextColor3 = c end
-        if tabChips[i] then tabChips[i].BackgroundTransparency = active and 0.82 or 0.93 end
-        if tabPages[i] then tabPages[i].Visible = active end
+        if tabLabels[i] then TweenService:Create(tabLabels[i], TweenInfo.new(0.14, Enum.EasingStyle.Quad), {TextColor3=c}):Play() end
+        if tabIcons[i] then TweenService:Create(tabIcons[i], TweenInfo.new(0.14, Enum.EasingStyle.Quad), {TextColor3=c}):Play() end
+        if tabChips[i] then TweenService:Create(tabChips[i], TweenInfo.new(0.14, Enum.EasingStyle.Quad), {BackgroundTransparency=active and 0.82 or 0.93}):Play() end
+        if tabPages[i] then
+            tabPages[i].Visible = active
+            if not active then tabPages[i].Visible=false end
+        end
     end
     indicator.Parent   = tabButtons[index]
     indicator.Position = UDim2.new(0, 2, 0.5, -10)
@@ -1803,14 +1806,16 @@ for i, name in ipairs(TAB_NAMES) do
 
     btn.MouseEnter:Connect(function()
         if i ~= activeTab then
-            nameLbl.TextColor3 = THEME.Text
-            iconLbl.TextColor3 = THEME.Text
+            TweenService:Create(nameLbl, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {TextColor3=THEME.Text}):Play()
+            TweenService:Create(iconLbl, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {TextColor3=THEME.Text}):Play()
+            TweenService:Create(chip, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {BackgroundTransparency=0.88}):Play()
         end
     end)
     btn.MouseLeave:Connect(function()
         if i ~= activeTab then
-            nameLbl.TextColor3 = THEME.SubText
-            iconLbl.TextColor3 = THEME.SubText
+            TweenService:Create(nameLbl, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {TextColor3=THEME.SubText}):Play()
+            TweenService:Create(iconLbl, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {TextColor3=THEME.SubText}):Play()
+            TweenService:Create(chip, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundTransparency=0.93}):Play()
         end
     end)
     btn.Activated:Connect(function()
@@ -1839,7 +1844,8 @@ for i, name in ipairs(TAB_NAMES) do
 
     local list = Instance.new("UIListLayout")
     list.Padding   = UDim.new(0, 6)
-    list.SortOrder = Enum.SortOrder.LayoutOrder
+    list.Padding = UDim.new(0, 6)
+    list.SortOrder = Enum.SortOrder.LayoutOrder -- ponytail: rapih
     list.Parent    = page
 
     local pad2 = Instance.new("UIPadding")
