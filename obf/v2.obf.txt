@@ -1,4 +1,4 @@
-c45d021250df
+-- hide.lat / maximum / c45d021250df
 local LoO0jooj=(getfenv and getfenv(1)) or _ENV or _G
 local jijjl0o,iIIlioii=string.byte,string.char
 local function LL00iL(IIjl11IlOj0I1,I1l0O0Ol1O0)
