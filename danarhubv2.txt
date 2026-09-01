@@ -250,66 +250,99 @@ bind(RunService.Stepped:Connect(function()
     end
 end))
 
+-- ponytail: IY-style Fly (menggantikan fly lama, satu sistem saja)
 local flyObjects, flyConn = {}, nil
-
-local flyInputConns = {}
-
+local flyKeys = {W=false,A=false,S=false,D=false,Space=false,Ctrl=false}
+local flyKeyConns = {}
 local function cleanFly()
-    if flyConn then flyConn:Disconnect() flyConn = nil end
-    for _, conn in ipairs(flyInputConns) do conn:Disconnect() end
-    flyInputConns = {}
-    for _, obj in pairs(flyObjects) do pcall(function() obj:Destroy() end) end
-    flyObjects = {}
+    if flyConn then flyConn:Disconnect() flyConn=nil end
+    for _,c in ipairs(flyKeyConns) do c:Disconnect() end
+    flyKeyConns={}
+    flyKeys={W=false,A=false,S=false,D=false,Space=false,Ctrl=false}
+    for _,o in pairs(flyObjects) do pcall(function() o:Destroy() end) end
+    flyObjects={}
 end
-
 local function applyFly(on)
     cleanFly()
     if not on then return end
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local hum  = getHumanoid()
-    if not root or not hum then return end
-
-    local bv = Instance.new("BodyVelocity")
-    bv.Velocity = Vector3.zero
-    bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-    bv.Parent   = root
-
-    local bg = Instance.new("BodyGyro")
-    bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-    bg.D         = 100
-    bg.CFrame    = root.CFrame
-    bg.Parent    = root
-
-    flyObjects = { bv, bg }
-
-    flyConn = RunService.Heartbeat:Connect(function(dt)
-        if not bv.Parent or not bg.Parent then return end
-        local char2 = player.Character
-        local r = char2 and char2:FindFirstChild("HumanoidRootPart")
-        if not r then return end
-        local cam = workspace.CurrentCamera
-        local cf  = cam.CFrame
-        local spd = State.FlySpeed
-        local hum2 = char2:FindFirstChildOfClass("Humanoid")
-        local md = hum2 and hum2.MoveDirection or Vector3.zero
-
-        local flatLook = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
-        flatLook = flatLook.Magnitude > 0 and flatLook.Unit or Vector3.zero
-        local flatRight = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
-        flatRight = flatRight.Magnitude > 0 and flatRight.Unit or Vector3.zero
-
-        local fwd    = md:Dot(flatLook)
-        local strafe = md:Dot(flatRight)
-        local move   = cf.LookVector * fwd + cf.RightVector * strafe
-
-        if move.Magnitude > 0 then
-            bv.Velocity = move.Unit * spd
-        else
-            bv.Velocity = Vector3.zero
+    local char=player.Character
+    local root=char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local bv=Instance.new("BodyVelocity")
+    bv.Velocity=Vector3.zero
+    bv.MaxForce=Vector3.new(1e9,1e9,1e9)
+    bv.Parent=root
+    local bg=Instance.new("BodyGyro")
+    bg.MaxTorque=Vector3.new(1e9,1e9,1e9)
+    bg.D=10
+    bg.P=9e4
+    bg.CFrame=root.CFrame
+    bg.Parent=root
+    flyObjects={bv,bg}
+    local function keyDown(k)
+        local kc=k.KeyCode
+        if kc==Enum.KeyCode.W then flyKeys.W=true
+        elseif kc==Enum.KeyCode.A then flyKeys.A=true
+        elseif kc==Enum.KeyCode.S then flyKeys.S=true
+        elseif kc==Enum.KeyCode.D then flyKeys.D=true
+        elseif kc==Enum.KeyCode.Space then flyKeys.Space=true
+        elseif kc==Enum.KeyCode.LeftControl or kc==Enum.KeyCode.LeftShift then flyKeys.Ctrl=true
         end
-        bg.CFrame = cf - cf.Position + r.Position
+    end
+    local function keyUp(k)
+        local kc=k.KeyCode
+        if kc==Enum.KeyCode.W then flyKeys.W=false
+        elseif kc==Enum.KeyCode.A then flyKeys.A=false
+        elseif kc==Enum.KeyCode.S then flyKeys.S=false
+        elseif kc==Enum.KeyCode.D then flyKeys.D=false
+        elseif kc==Enum.KeyCode.Space then flyKeys.Space=false
+        elseif kc==Enum.KeyCode.LeftControl or kc==Enum.KeyCode.LeftShift then flyKeys.Ctrl=false
+        end
+    end
+    table.insert(flyKeyConns, UserInputService.InputBegan:Connect(keyDown))
+    table.insert(flyKeyConns, UserInputService.InputEnded:Connect(keyUp))
+    flyConn=RunService.Heartbeat:Connect(function()
+        if not bv.Parent or not bg.Parent then return end
+        local c2=player.Character
+        local r=c2 and c2:FindFirstChild("HumanoidRootPart")
+        if not r then return end
+        local cam=workspace.CurrentCamera
+        local cf=cam.CFrame
+        local spd=State.FlySpeed
+        -- IY: WASD + Space/Ctrl, fallback ke MoveDirection untuk mobile
+        local move = Vector3.zero
+        if flyKeys.W then move+=cf.LookVector end
+        if flyKeys.S then move-=cf.LookVector end
+        if flyKeys.A then move-=cf.RightVector end
+        if flyKeys.D then move+=cf.RightVector end
+        if flyKeys.Space then move+=Vector3.new(0,1,0) end
+        if flyKeys.Ctrl then move-=Vector3.new(0,1,0) end
+        -- fallback mobile thumbstick jika tidak ada key tertekan
+        if move.Magnitude==0 then
+            local hum=c2:FindFirstChildOfClass("Humanoid")
+            local md=hum and hum.MoveDirection or Vector3.zero
+            if md.Magnitude>0 then
+                local f=md:Dot(Vector3.new(cf.LookVector.X,0,cf.LookVector.Z).Unit)
+                local s=md:Dot(Vector3.new(cf.RightVector.X,0,cf.RightVector.Z).Unit)
+                move = cf.LookVector*f + cf.RightVector*s
+                -- vertical via jump button handled by Space key already
+            end
+        end
+        if move.Magnitude>0 then bv.Velocity=move.Unit*spd else bv.Velocity=Vector3.zero end
+        bg.CFrame=cam.CFrame
     end)
+end
+-- Click Teleport (Ctrl+Click)
+State.ClickTP=false
+do
+    local mouse=player:GetMouse()
+    bind(mouse.Button1Down:Connect(function()
+        if not State.ClickTP then return end
+        if not UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) and not UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then return end
+        local c=player.Character
+        local r=c and c:FindFirstChild("HumanoidRootPart")
+        if r and mouse.Hit then r.CFrame=CFrame.new(mouse.Hit.Position+Vector3.new(0,3,0)) end
+    end))
 end
 
 local flingSteppedConn = nil
@@ -2025,9 +2058,9 @@ end
 
 local function createButton(page, text, callback)
     local btn = Instance.new("TextButton")
-    btn.Size             = UDim2.new(1, -16, 0, 36)
+    btn.Size             = UDim2.new(1, -16, 0, 34)
     btn.BackgroundColor3 = THEME.Card
-    btn.BackgroundTransparency = 0.5
+    btn.BackgroundTransparency = 0.45
     btn.BorderSizePixel  = 0
     btn.Font             = Enum.Font.GothamMedium
     btn.TextSize         = 13
@@ -2036,10 +2069,26 @@ local function createButton(page, text, callback)
     btn.AutoButtonColor  = false
     btn.LayoutOrder      = nextOrder(page)
     btn.Parent           = page
-    round(btn, 8)
-    stroke(btn, THEME.Accent2, 1)
-    btn.MouseEnter:Connect(function() btn.BackgroundTransparency = 0 end)
-    btn.MouseLeave:Connect(function() btn.BackgroundTransparency = 0.5 end)
+    round(btn, 10)
+    local s = stroke(btn, THEME.Accent, 1.15)
+    s.Transparency = 0.28
+    local glow = Instance.new("UIStroke")
+    glow.Color = THEME.Accent
+    glow.Thickness = 3
+    glow.Transparency = 0.82
+    glow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    glow.Parent = btn
+    -- ponytail: kecil rounded + accent stroke glowing
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.14, Enum.EasingStyle.Quad), {BackgroundTransparency=0.15}):Play()
+        TweenService:Create(s, TweenInfo.new(0.14), {Transparency=0}):Play()
+        TweenService:Create(glow, TweenInfo.new(0.14), {Transparency=0.55}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {BackgroundTransparency=0.45}):Play()
+        TweenService:Create(s, TweenInfo.new(0.18), {Transparency=0.28}):Play()
+        TweenService:Create(glow, TweenInfo.new(0.18), {Transparency=0.82}):Play()
+    end)
     btn.Activated:Connect(callback)
 end
 
@@ -2559,6 +2608,7 @@ if not IS_BF then
     createSlider(pg, "Fly Speed", 10, 200, 60, function(v) State.FlySpeed = v end)
     createSlider(pg, "TP Speed", 1, 10, 3, function(v) State.TPSpeed = v end)
     createToggle(pg, "TP Walk", false, function(v) setTPWalk(v) end)
+    createToggle(pg, "Click Teleport (Ctrl+Click)", false, function(v) State.ClickTP=v end)
     createToggle(pg, "Anti Fling", false, function(v) setAntiFling(v) end)
     createToggle(pg, "Wall Hop Flick", false, function(v) flickBtn.Visible = v end)
     sectionLabel(pg, "Cosmetics")
