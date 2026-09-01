@@ -1014,15 +1014,39 @@ local SKY_PRESETS = {
     ["Cloud Sky"] = "rbxassetid://17480150596",
 }
 local skyObj = nil
+local skyOrig = nil
 local function setSkybox(name)
-    if skyObj then pcall(function() skyObj:Destroy() end) skyObj=nil end
+    local Lighting = game:GetService("Lighting")
+    local sky = Lighting:FindFirstChildOfClass("Sky")
+    if not sky then
+        sky = Instance.new("Sky")
+        sky.Parent = Lighting
+    end
+    if not skyOrig then
+        -- simpan original sekali
+        skyOrig = {
+            Bk = sky.SkyboxBk, Dn = sky.SkyboxDn, Ft = sky.SkyboxFt,
+            Lf = sky.SkyboxLf, Rt = sky.SkyboxRt, Up = sky.SkyboxUp,
+            SunSize = sky.SunAngularSize, SunTex = sky.SunTextureId
+        }
+    end
     if not name or name=="Default" then
-        -- restore default sky (hapus custom)
+        -- restore original
+        if skyOrig then
+            sky.SkyboxBk = skyOrig.Bk
+            sky.SkyboxDn = skyOrig.Dn
+            sky.SkyboxFt = skyOrig.Ft
+            sky.SkyboxLf = skyOrig.Lf
+            sky.SkyboxRt = skyOrig.Rt
+            sky.SkyboxUp = skyOrig.Up
+            sky.SunAngularSize = skyOrig.SunSize
+            sky.SunTextureId = skyOrig.SunTex
+        end
+        skyObj = sky
         return
     end
     local id = SKY_PRESETS[name]
-    if not id then return end
-    local sky = Instance.new("Sky")
+    if not id or id=="" then return end
     sky.SkyboxBk = id
     sky.SkyboxDn = id
     sky.SkyboxFt = id
@@ -1031,7 +1055,6 @@ local function setSkybox(name)
     sky.SkyboxUp = id
     sky.SunAngularSize = 21
     sky.SunTextureId = "rbxassetid://1084354320"
-    sky.Parent = game:GetService("Lighting")
     skyObj = sky
 end
 local function setTracers(on)
