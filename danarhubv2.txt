@@ -553,144 +553,79 @@ local function clearKorbloxChar(char)
     korbloxOriginals = {}
 end
 
--- ponytail: Avatar Mimic full set (local, 1 set penuh bukan part)
+-- ponytail: Avatar Mimic overlay (open source Kixdev style, 1 set full presisi)
+-- tidak ubah karakter asli (ApplyDescription sering block server), tapi spawn clone model via CreateHumanoidModelFromUserIdAsync
+-- overlay di-weld ke HRP + mirror Motor6D Transform tiap frame -> body & aksesori 100% presisi
+local avatarMimicOverlay = nil
+local avatarMimicWeld = nil
+local avatarMimicMirrorConn = nil
 local avatarOriginalDesc = nil
 local avatarMimicTargetId = nil
-local avatarOriginalClones = {}
-local function saveOriginalAppearance()
-    if next(avatarOriginalClones) ~= nil then return end
+local function hideRealChar(hide)
     local char = player.Character
     if not char then return end
-    for _,v in ipairs(char:GetChildren()) do
-        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") or v:IsA("BodyColors") or v.Name:find("Original") then
-            -- simpan clone untuk restore
-        end
+    for _,v in ipairs(char:GetDescendants()) do
+        if v:IsA("BasePart") then v.LocalTransparencyModifier = hide and 1 or 0
+        elseif v:IsA("Decal") then v.LocalTransparencyModifier = hide and 1 or 0 end
     end
-    -- simpan via HumanoidDescription untuk restore full
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        local okD, d0 = pcall(function() return hum:GetAppliedDescription() end)
-        if okD and d0 then avatarOriginalDesc = d0:Clone() end
-    end
-    -- simpan children penting
-    for _,v in ipairs(char:GetChildren()) do
-        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then
-            avatarOriginalClones[v] = v:Clone()
-        end
-    end
-end
-local function applyAvatarMimic(userId)
-    -- userId disini adalah target player UserId (server mimic)
-    local targetPlr = nil
-    for _,pl in ipairs(Players:GetPlayers()) do if pl.UserId==userId then targetPlr=pl break end end
-    if not targetPlr or not targetPlr.Character then warn("[Mimic] target char tidak ada") return end
-    local srcChar = targetPlr.Character
-    local dstChar = player.Character
-    local dstHum = dstChar and dstChar:FindFirstChildOfClass("Humanoid")
-    if not dstChar or not dstHum then warn("[Mimic] dst tidak siap") return end
-    saveOriginalAppearance()
-    avatarMimicTargetId = userId
-    -- coba primary: desc live dari target hum (paling presisi)
-    do
-        local okDesc, liveDesc = pcall(function()
-            local th = targetPlr.Character and targetPlr.Character:FindFirstChildOfClass("Humanoid")
-            return th and th:GetAppliedDescription()
-        end)
-        if okDesc and liveDesc then
-            pcall(function() dstHum:ApplyDescription(liveDesc) end)
-            -- verifikasi body kebentuk? kalau sudah, tetap lanjut clone untuk amankan accessory yang mungkin ke-skip
-        end
-    end
-    -- hapus clothes/accessories lama dst
-    for _,v in ipairs(dstChar:GetChildren()) do
-        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then v:Destroy() end
-    end
-    -- clone dari src
-    for _,v in ipairs(srcChar:GetChildren()) do
-        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") or v:IsA("BodyColors") then
-            local cl = v:Clone()
-            cl.Parent = dstChar
-        end
-        -- clone face decal
-        if v.Name=="Head" then
-            for _,dec in ipairs(v:GetChildren()) do if dec:IsA("Decal") then
-                local hHead = dstChar:FindFirstChild("Head")
-                if hHead then local c=dec:Clone(); c.Parent=hHead end
-            end end
-        end
-    end
-    -- copy BodyColors values
-    local srcBC = srcChar:FindFirstChildOfClass("BodyColors") or srcChar:FindFirstChild("Body Colors")
-    local dstBC = dstChar:FindFirstChildOfClass("BodyColors")
-    if srcBC and dstBC then
-        pcall(function()
-            dstBC.HeadColor3 = srcBC.HeadColor3
-            dstBC.TorsoColor3 = srcBC.TorsoColor3
-            dstBC.LeftArmColor3 = srcBC.LeftArmColor3
-            dstBC.RightArmColor3 = srcBC.RightArmColor3
-            dstBC.LeftLegColor3 = srcBC.LeftLegColor3
-            dstBC.RightLegColor3 = srcBC.RightLegColor3
-        end)
-    end
-    -- copy body meshes (Head/Torso/Limbs) full set
-    for _,part in ipairs(srcChar:GetChildren()) do
-        if part:IsA("BasePart") then
-            local dp = dstChar:FindFirstChild(part.Name)
-            if dp then
-                pcall(function()
-                    if part:IsA("MeshPart") and dp:IsA("MeshPart") then
-                        dp.MeshId = part.MeshId
-                        dp.TextureID = part.TextureID
-                    end
-                    -- R6 SpecialMesh
-                    local sm = part:FindFirstChildOfClass("SpecialMesh")
-                    if sm then
-                        local dsm = dp:FindFirstChildOfClass("SpecialMesh")
-                        if dsm then
-                            dsm.MeshId = sm.MeshId
-                            dsm.TextureId = sm.TextureId
-                            dsm.MeshType = sm.MeshType
-                            dsm.Scale = sm.Scale
-                            dsm.Offset = sm.Offset
-                        else
-                            local cl = sm:Clone(); cl.Parent = dp
-                        end
-                    end
-                    -- copy Part properties skala
-                    dp.Size = part.Size
-                end)
-            end
-        end
-    end
-    -- copy Humanoid scales
-    pcall(function()
-        local sHum = srcChar:FindFirstChildOfClass("Humanoid")
-        if sHum then
-            for _,nm in ipairs({"BodyHeightScale","BodyWidthScale","BodyDepthScale","HeadScale","BodyTypeScale","ProportionScale"}) do
-                local sv = sHum:FindFirstChild(nm)
-                local dv = dstHum:FindFirstChild(nm)
-                if sv and dv then dv.Value = sv.Value end
-            end
-        end
-    end)
-    -- fallback ApplyDescription juga
-    pcall(function()
-        local ok, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(userId) end)
-        if ok and desc then pcall(function() dstHum:ApplyDescription(desc) end) end
-    end)
 end
 local function clearAvatarMimic()
     avatarMimicTargetId = nil
+    if avatarMimicMirrorConn then avatarMimicMirrorConn:Disconnect() avatarMimicMirrorConn=nil end
+    if avatarMimicOverlay then pcall(function() avatarMimicOverlay:Destroy() end) avatarMimicOverlay=nil end
+    if avatarMimicWeld then pcall(function() avatarMimicWeld:Destroy() end) avatarMimicWeld=nil end
+    hideRealChar(false)
+end
+local function applyAvatarMimic(userId)
+    clearAvatarMimic()
+    avatarMimicTargetId = userId
     local char = player.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not char or not hum then return end
-    -- hapus mimic
-    for _,v in ipairs(char:GetChildren()) do
-        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then v:Destroy() end
-    end
-    -- restore original
-    for _,cl in pairs(avatarOriginalClones) do if cl then local c=cl:Clone(); c.Parent=char end end
-    if avatarOriginalDesc then pcall(function() hum:ApplyDescription(avatarOriginalDesc) end) end
+    local myHRP = char and char:FindFirstChild("HumanoidRootPart")
+    if not myHRP then warn("[Mimic] HRP tidak ada") return end
+    task.spawn(function()
+        local ok, model = pcall(function() return Players:CreateHumanoidModelFromUserIdAsync(userId) end)
+        if not ok or not model then
+            local ok2, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(userId) end)
+            if ok2 and desc then
+                ok, model = pcall(function()
+                    local m = Instance.new("Model")
+                    local hum = Instance.new("Humanoid"); hum.Parent=m
+                    pcall(function() hum:ApplyDescription(desc) end)
+                    return m
+                end)
+            end
+        end
+        if not ok or not model then warn("[Mimic] gagal buat model", userId) return end
+        for _,v in ipairs(model:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide=false; v.CanTouch=false; v.CanQuery=false; v.Massless=true end
+            if v:IsA("Script") or v:IsA("LocalScript") then v.Disabled=true end
+        end
+        model.Parent = workspace.CurrentCamera
+        avatarMimicOverlay = model
+        local oHRP = model:FindFirstChild("HumanoidRootPart")
+        local oHum = model:FindFirstChildOfClass("Humanoid")
+        if not oHRP or not oHum then warn("[Mimic] model invalid") return end
+        oHum:ChangeState(Enum.HumanoidStateType.Physics)
+        local wc = Instance.new("WeldConstraint")
+        wc.Part0 = myHRP
+        wc.Part1 = oHRP
+        wc.Parent = myHRP
+        avatarMimicWeld = wc
+        oHRP.CFrame = myHRP.CFrame
+        hideRealChar(true)
+        local map = {}
+        for _,m in ipairs(model:GetDescendants()) do if m:IsA("Motor6D") then map[m.Name.."|"..m.Part0.Name.."|"..m.Part1.Name]=m end end
+        avatarMimicMirrorConn = game:GetService("RunService").RenderStepped:Connect(function()
+            if not avatarMimicOverlay or not avatarMimicOverlay.Parent or not myHRP.Parent then return end
+            for _,orig in ipairs(char:GetDescendants()) do
+                if orig:IsA("Motor6D") then
+                    local key = orig.Name.."|"..orig.Part0.Name.."|"..orig.Part1.Name
+                    local target = map[key]
+                    if target then target.Transform = orig.Transform end
+                end
+            end
+        end)
+    end)
 end
 
 local function refreshCosmeticSpawn()
