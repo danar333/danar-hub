@@ -605,17 +605,20 @@ local function applyAvatarMimic(userId)
     for _,v in ipairs(dstChar:GetChildren()) do
         if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then v:Destroy() end
     end
-    -- clone dari src
+    -- clone dari src (aksesori semua tipe)
     for _,v in ipairs(srcChar:GetChildren()) do
-        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") or v:IsA("BodyColors") then
+        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") or v:IsA("BodyColors") or v:IsA("CharacterMesh") then
             local cl = v:Clone()
             cl.Parent = dstChar
         end
-        -- clone face decal
         if v.Name=="Head" then
-            for _,dec in ipairs(v:GetChildren()) do if dec:IsA("Decal") then
+            for _,dec in ipairs(v:GetChildren()) do if dec:IsA("Decal") or dec:IsA("Texture") then
                 local hHead = dstChar:FindFirstChild("Head")
-                if hHead then local c=dec:Clone(); c.Parent=hHead end
+                if hHead then
+                    -- hapus decal lama dulu biar tidak dobel
+                    for _,old in ipairs(hHead:GetChildren()) do if old:IsA("Decal") and old.Texture==dec.Texture then old:Destroy() end end
+                    local c=dec:Clone(); c.Parent=hHead
+                end
             end end
         end
     end
@@ -632,7 +635,7 @@ local function applyAvatarMimic(userId)
             dstBC.RightLegColor3 = srcBC.RightLegColor3
         end)
     end
-    -- copy body meshes (Head/Torso/Limbs) full set
+    -- copy body meshes (Head/Torso/Limbs) full set + layered
     for _,part in ipairs(srcChar:GetChildren()) do
         if part:IsA("BasePart") then
             local dp = dstChar:FindFirstChild(part.Name)
@@ -642,7 +645,6 @@ local function applyAvatarMimic(userId)
                         dp.MeshId = part.MeshId
                         dp.TextureID = part.TextureID
                     end
-                    -- R6 SpecialMesh
                     local sm = part:FindFirstChildOfClass("SpecialMesh")
                     if sm then
                         local dsm = dp:FindFirstChildOfClass("SpecialMesh")
@@ -656,13 +658,27 @@ local function applyAvatarMimic(userId)
                             local cl = sm:Clone(); cl.Parent = dp
                         end
                     end
-                    -- copy Part properties skala
                     dp.Size = part.Size
+                    -- wrap layer untuk layered clothing (R15)
+                    for _,wl in ipairs(part:GetChildren()) do
+                        if wl:IsA("WrapLayer") then
+                            local dwl = dp:FindFirstChild(wl.Name)
+                            if not dwl then dwl = wl:Clone(); dwl.Parent = dp end
+                        end
+                    end
                 end)
             end
         end
     end
-    -- copy Humanoid scales
+    -- copy WrapLayer / PantsLayer yang nempel di char (layered)
+    for _,v in ipairs(srcChar:GetChildren()) do
+        if v:IsA("WrapLayer") or v.Name:find("Layer") then
+            pcall(function()
+                local cl = v:Clone(); cl.Parent = dstChar
+            end)
+        end
+    end
+    -- copy Humanoid scales + face
     pcall(function()
         local sHum = srcChar:FindFirstChildOfClass("Humanoid")
         if sHum then
@@ -670,6 +686,16 @@ local function applyAvatarMimic(userId)
                 local sv = sHum:FindFirstChild(nm)
                 local dv = dstHum:FindFirstChild(nm)
                 if sv and dv then dv.Value = sv.Value end
+            end
+            -- face texture via Head decal
+            local sHead = srcChar:FindFirstChild("Head")
+            local dHead = dstChar:FindFirstChild("Head")
+            if sHead and dHead then
+                for _,dec in ipairs(sHead:GetChildren()) do
+                    if dec:IsA("Decal") and dec.Texture:find("face") or dec.Name:lower():find("face") then
+                        for _,ddec in ipairs(dHead:GetChildren()) do if ddec:IsA("Decal") then ddec.Texture = dec.Texture end end
+                    end
+                end
             end
         end
     end)
