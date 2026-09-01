@@ -529,48 +529,89 @@ end
 -- ponytail: Avatar Mimic full set (local, 1 set penuh bukan part)
 local avatarOriginalDesc = nil
 local avatarMimicTargetId = nil
-local function applyAvatarMimic(userId)
+local avatarOriginalClones = {}
+local function saveOriginalAppearance()
+    if next(avatarOriginalClones) ~= nil then return end
     local char = player.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then warn("[Mimic] no humanoid") return end
-    if not avatarOriginalDesc then
-        local okD, desc0 = pcall(function() return hum:GetAppliedDescription() end)
-        if okD and desc0 then
-            local okC, cl = pcall(function() return desc0:Clone() end)
-            avatarOriginalDesc = (okC and cl) or desc0
-        else
-            avatarOriginalDesc = Instance.new("HumanoidDescription")
+    if not char then return end
+    for _,v in ipairs(char:GetChildren()) do
+        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") or v:IsA("BodyColors") or v.Name:find("Original") then
+            -- simpan clone untuk restore
         end
     end
-    avatarMimicTargetId = userId
-    task.spawn(function()
-        -- tunggu humanoid siap
-        task.wait(0.2)
-        local char2 = player.Character
-        local hum2 = char2 and char2:FindFirstChildOfClass("Humanoid")
-        if not hum2 then warn("[Mimic] hum2 hilang") return end
-        local ok, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(userId) end)
-        if not ok or not desc then warn("[Mimic] GetDesc gagal", userId, desc) return end
-        -- ApplyDescription harus di Heartbeat setelah rig load
-        local okA, err = pcall(function() hum2:ApplyDescription(desc) end)
-        if not okA then warn("[Mimic] Apply gagal", err) end
-        -- fallback: coba via AppearanceAsync jika Apply gagal
-        if not okA then
-            pcall(function()
-                local m = Players:GetCharacterAppearanceAsync(userId)
-                -- local apply manual: load appearance ke char2 (jarang dipakai, tapi coba)
-            end)
+    -- simpan via HumanoidDescription untuk restore full
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        local okD, d0 = pcall(function() return hum:GetAppliedDescription() end)
+        if okD and d0 then avatarOriginalDesc = d0:Clone() end
+    end
+    -- simpan children penting
+    for _,v in ipairs(char:GetChildren()) do
+        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then
+            avatarOriginalClones[v] = v:Clone()
         end
+    end
+end
+local function applyAvatarMimic(userId)
+    -- userId disini adalah target player UserId (server mimic)
+    local targetPlr = nil
+    for _,pl in ipairs(Players:GetPlayers()) do if pl.UserId==userId then targetPlr=pl break end end
+    if not targetPlr or not targetPlr.Character then warn("[Mimic] target char tidak ada") return end
+    local srcChar = targetPlr.Character
+    local dstChar = player.Character
+    local dstHum = dstChar and dstChar:FindFirstChildOfClass("Humanoid")
+    if not dstChar or not dstHum then warn("[Mimic] dst tidak siap") return end
+    saveOriginalAppearance()
+    avatarMimicTargetId = userId
+    -- hapus clothes/accessories lama dst
+    for _,v in ipairs(dstChar:GetChildren()) do
+        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then v:Destroy() end
+    end
+    -- clone dari src
+    for _,v in ipairs(srcChar:GetChildren()) do
+        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") or v:IsA("BodyColors") then
+            local cl = v:Clone()
+            cl.Parent = dstChar
+        end
+        -- clone face decal
+        if v.Name=="Head" then
+            for _,dec in ipairs(v:GetChildren()) do if dec:IsA("Decal") then
+                local hHead = dstChar:FindFirstChild("Head")
+                if hHead then local c=dec:Clone(); c.Parent=hHead end
+            end end
+        end
+    end
+    -- copy BodyColors values
+    local srcBC = srcChar:FindFirstChildOfClass("BodyColors") or srcChar:FindFirstChild("Body Colors")
+    local dstBC = dstChar:FindFirstChildOfClass("BodyColors")
+    if srcBC and dstBC then
+        pcall(function()
+            dstBC.HeadColor3 = srcBC.HeadColor3
+            dstBC.TorsoColor3 = srcBC.TorsoColor3
+            dstBC.LeftArmColor3 = srcBC.LeftArmColor3
+            dstBC.RightArmColor3 = srcBC.RightArmColor3
+            dstBC.LeftLegColor3 = srcBC.LeftLegColor3
+            dstBC.RightLegColor3 = srcBC.RightLegColor3
+        end)
+    end
+    -- copy mesh / scaling via HumanoidDescription fallback (jika clone di atas kurang)
+    pcall(function()
+        local ok, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(userId) end)
+        if ok and desc then pcall(function() dstHum:ApplyDescription(desc) end) end
     end)
 end
 local function clearAvatarMimic()
     avatarMimicTargetId = nil
     local char = player.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum and avatarOriginalDesc then
-        pcall(function() hum:ApplyDescription(avatarOriginalDesc) end)
+    if not char or not hum then return end
+    -- hapus mimic
+    for _,v in ipairs(char:GetChildren()) do
+        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then v:Destroy() end
     end
-    avatarOriginalDesc = nil
+    -- restore original
+    for _,cl in pairs(avatarOriginalClones) do if cl then local c=cl:Clone(); c.Parent=char end end
+    if avatarOriginalDesc then pcall(function() hum:ApplyDescription(avatarOriginalDesc) end) end
 end
 
 local function refreshCosmeticSpawn()
