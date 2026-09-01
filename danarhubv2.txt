@@ -1083,6 +1083,44 @@ local function setSkybox(name)
     end
     skyObj = sky
 end
+-- Music player (ponytail: 1 Sound object di PlayerGui, loop)
+local MUSIC_LIST = {
+    ["Lofi Chill"]  = "rbxassetid://1837846974",
+    ["Synthwave"]   = "rbxassetid://6329625489",
+    ["Phonk"]       = "rbxassetid://9042231581",
+    ["Night Drive"] = "rbxassetid://6220544288",
+    ["Epic Beat"]   = "rbxassetid://1297725940",
+}
+local musicSound = nil
+local currentSong = "Lofi Chill"
+local function getMusicSound()
+    if musicSound and musicSound.Parent then return musicSound end
+    local s = Instance.new("Sound")
+    s.Name = "DanarHubMusic"
+    s.Volume = 0.5
+    s.Looped = true
+    s.Parent = player:FindFirstChildOfClass("PlayerGui") or game:GetService("CoreGui")
+    musicSound = s
+    return s
+end
+local function stopMusic()
+    local s = musicSound
+    if s and s.Parent then
+        s:Stop()
+        s.Parent = nil
+        s:Destroy()
+    end
+    musicSound = nil
+end
+local function playMusic()
+    local s = getMusicSound()
+    s.SoundId = MUSIC_LIST[currentSong] or s.SoundId
+    s.TimePosition = 0
+    s:Play()
+end
+local function setMusicVolume(v)
+    if musicSound and musicSound.Parent then musicSound.Volume = v end
+end
 local function setTracers(on)
     State.Tracers = on
     clearTracers()
@@ -2014,12 +2052,12 @@ content.BackgroundTransparency = 1
 content.ZIndex              = 5
 content.Parent              = main
 
-local TAB_NAMES = { "Player", "Combat", "Visual", "Utility", "Settings" }
+local TAB_NAMES = { "Player", "Combat", "Visual", "Utility", "Settings", "Music" }
 if IS_MM2 then table.insert(TAB_NAMES, "MM2") end
 
 local TAB_ICONS = {
     Player = "◆", Combat = "▲", Visual = "○",
-    Utility = "□", Settings = "≡", MM2 = "●",
+    Utility = "□", Settings = "≡", Music = "♫", MM2 = "●",
     Home = "★", Farm = "►", Raid = "♦", Event = "●",
     Teleport = "▼", ESP = "○", Setelan = "■", ["Farm Lain"] = "▪",
 } -- ponytail: ikon distinct tapi satu family geometric, warna aktif konsisten
@@ -3140,6 +3178,19 @@ if not IS_BF then
     createButton(pg, "Unload Script", function() screenGui:Destroy() end)
     sectionLabel(pg, "Credit")
     createNote(pg, "Created by danar")
+end
+
+if not IS_BF then
+    local pg = tabPages[6]
+    sectionLabel(pg, "Music Player")
+    local songNames = {}
+    for k in pairs(MUSIC_LIST) do table.insert(songNames, k) end
+    table.sort(songNames)
+    createDropdown(pg, "Pilih Lagu", songNames, 1, function(v) currentSong = v; if musicSound and musicSound.Playing then playMusic() end end)
+    createToggle(pg, "Play / Stop", false, function(v) if v then playMusic() else stopMusic() end end)
+    createSlider(pg, "Volume", 0, 100, 50, function(v) setMusicVolume(v/100) end)
+    createButton(pg, "Stop Music", stopMusic)
+    createNote(pg, "Music cuma keluar di device sendiri (Sound client-side). Pakai id lain tinggal edit MUSIC_LIST.")
 end
 
 if IS_MM2 then
