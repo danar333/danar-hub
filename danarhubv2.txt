@@ -526,13 +526,44 @@ local function clearKorbloxChar(char)
     korbloxOriginals = {}
 end
 
+-- ponytail: Avatar Mimic full set (local, 1 set penuh bukan part)
+local avatarOriginalDesc = nil
+local avatarMimicTargetId = nil
+local function applyAvatarMimic(userId)
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    if not avatarOriginalDesc then
+        local okD, desc0 = pcall(function() return hum:GetAppliedDescription() end)
+        if okD and desc0 then avatarOriginalDesc = desc0:Clone()
+        else avatarOriginalDesc = Instance.new("HumanoidDescription") end
+    end
+    avatarMimicTargetId = userId
+    task.spawn(function()
+        local ok, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(userId) end)
+        if ok and desc and hum.Parent then
+            pcall(function() hum:ApplyDescription(desc) end)
+        end
+    end)
+end
+local function clearAvatarMimic()
+    avatarMimicTargetId = nil
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum and avatarOriginalDesc then
+        pcall(function() hum:ApplyDescription(avatarOriginalDesc) end)
+    end
+    avatarOriginalDesc = nil
+end
+
 local function refreshCosmeticSpawn()
     if cosmeticSpawnConn then cosmeticSpawnConn:Disconnect() cosmeticSpawnConn = nil end
-    if State.Headless or State.Korblox then
+    if State.Headless or State.Korblox or avatarMimicTargetId then
         cosmeticSpawnConn = player.CharacterAdded:Connect(function(c)
             task.wait(0.5)
             if State.Headless then applyHeadlessChar(c) end
             if State.Korblox then applyKorbloxChar(c) end
+            if avatarMimicTargetId then applyAvatarMimic(avatarMimicTargetId) end
         end)
     end
 end
@@ -2620,6 +2651,33 @@ if not IS_BF then
     sectionLabel(pg, "Cosmetics")
     createToggle(pg, "Headless (Local)", false, function(v) setHeadless(v) end, "Hanya terlihat olehmu, bukan pemain lain")
     createToggle(pg, "Korblox Leg (Local)", false, function(v) setKorblox(v) end, "Hanya terlihat olehmu, bukan pemain lain")
+    sectionLabel(pg, "Avatar Mimic (Full Set)")
+    do
+        local mimicLabels={}
+        local function buildMimicOptions()
+            local list, by={},{}
+            for _,pl in ipairs(Players:GetPlayers()) do if pl~=player then
+                local lab=pl.DisplayName
+                if by[lab] then lab=lab.." (@"..pl.Name..")" end
+                by[lab]=pl
+                table.insert(list, lab)
+            end end
+            mimicLabels=by
+            if #list==0 then return {"(no player)"} end
+            return list
+        end
+        local mimicDrop = createDropdown(pg, "Target Mimic", buildMimicOptions(), nil, function(opt)
+            local pl=mimicLabels[opt]
+            if pl then avatarMimicTargetId=pl.UserId end
+        end)
+        createButton(pg, "Apply Mimic (Full Avatar)", function()
+            if avatarMimicTargetId then applyAvatarMimic(avatarMimicTargetId) end
+        end)
+        createButton(pg, "Clear Mimic (Restore)", function() clearAvatarMimic() end)
+        -- refresh list saat player join/leave
+        bind(Players.PlayerAdded:Connect(function() pcall(function() mimicDrop.SetOptions(buildMimicOptions()) end) end))
+        bind(Players.PlayerRemoving:Connect(function() pcall(function() mimicDrop.SetOptions(buildMimicOptions()) end) end))
+    end
 end
 
 if not IS_BF then
