@@ -684,6 +684,7 @@ local function applyAvatarMimic(userId)
         end
     end)
     if perfectModel then pcall(function() perfectModel:Destroy() end) end
+end
 local function clearAvatarMimic()
     avatarMimicTargetId = nil
     local char = player.Character
