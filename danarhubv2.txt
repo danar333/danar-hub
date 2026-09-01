@@ -255,6 +255,10 @@ local flyObjects, flyConn = {}, nil
 local flyKeys = {W=false,A=false,S=false,D=false,Space=false,Ctrl=false}
 local flyKeyConns = {}
 local function cleanFly()
+    pcall(function()
+        local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if h then h.PlatformStand = false end
+    end)
     if flyConn then flyConn:Disconnect() flyConn=nil end
     for _,c in ipairs(flyKeyConns) do c:Disconnect() end
     flyKeyConns={}
@@ -272,10 +276,12 @@ local function applyFly(on)
     bv.Velocity=Vector3.zero
     bv.MaxForce=Vector3.new(1e9,1e9,1e9)
     bv.Parent=root
+    local hum0 = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+    if hum0 then hum0.PlatformStand = true end
     local bg=Instance.new("BodyGyro")
-    bg.MaxTorque=Vector3.new(1e9,1e9,1e9)
-    bg.D=10
-    bg.P=9e4
+    bg.MaxTorque=Vector3.new(9e4,9e4,9e4)
+    bg.D=50
+    bg.P=1e4
     bg.CFrame=root.CFrame
     bg.Parent=root
     flyObjects={bv,bg}
@@ -329,10 +335,14 @@ local function applyFly(on)
             end
         end
         if move.Magnitude>0 then bv.Velocity=move.Unit*spd else bv.Velocity=Vector3.zero end
-        bg.CFrame=cam.CFrame
+        -- ponytail: hanya yaw+pitch, tanpa roll biar tidak getar saat look up/down
+        local cf = cam.CFrame
+        local look = cf.LookVector
+        -- hilangkan roll, stabilkan
+        bg.CFrame = CFrame.new(r.Position, r.Position + look)
     end)
 end
--- Click Teleport (Ctrl+Click)
+-- Click Teleport (Ctrl+Click PC / Tap HP)
 State.ClickTP=false
 do
     local mouse=player:GetMouse()
@@ -342,6 +352,23 @@ do
         local c=player.Character
         local r=c and c:FindFirstChild("HumanoidRootPart")
         if r and mouse.Hit then r.CFrame=CFrame.new(mouse.Hit.Position+Vector3.new(0,3,0)) end
+    end))
+    -- ponytail: HP touch tap tanpa Ctrl
+    bind(UserInputService.TouchTapInWorld:Connect(function(positions)
+        if not State.ClickTP then return end
+        -- hanya untuk touch device, PC sudah handle via Ctrl+Click
+        if not UserInputService.TouchEnabled then return end
+        local pos = positions[1]
+        if not pos then return end
+        local cam = workspace.CurrentCamera
+        local ray = cam:ScreenPointToRay(pos.X, pos.Y)
+        local params = RaycastParams.new()
+        params.FilterDescendantsInstances = {player.Character}
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        local res = workspace:Raycast(ray.Origin, ray.Direction*2000, params)
+        local dest = res and res.Position or (ray.Origin + ray.Direction*500)
+        local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if r then r.CFrame = CFrame.new(dest + Vector3.new(0,3,0)) end
     end))
 end
 
@@ -563,6 +590,17 @@ local function applyAvatarMimic(userId)
     if not dstChar or not dstHum then warn("[Mimic] dst tidak siap") return end
     saveOriginalAppearance()
     avatarMimicTargetId = userId
+    -- coba primary: desc live dari target hum (paling presisi)
+    do
+        local okDesc, liveDesc = pcall(function()
+            local th = targetPlr.Character and targetPlr.Character:FindFirstChildOfClass("Humanoid")
+            return th and th:GetAppliedDescription()
+        end)
+        if okDesc and liveDesc then
+            pcall(function() dstHum:ApplyDescription(liveDesc) end)
+            -- verifikasi body kebentuk? kalau sudah, tetap lanjut clone untuk amankan accessory yang mungkin ke-skip
+        end
+    end
     -- hapus clothes/accessories lama dst
     for _,v in ipairs(dstChar:GetChildren()) do
         if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then v:Destroy() end
