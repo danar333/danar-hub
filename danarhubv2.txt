@@ -532,17 +532,34 @@ local avatarMimicTargetId = nil
 local function applyAvatarMimic(userId)
     local char = player.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
+    if not hum then warn("[Mimic] no humanoid") return end
     if not avatarOriginalDesc then
         local okD, desc0 = pcall(function() return hum:GetAppliedDescription() end)
-        if okD and desc0 then avatarOriginalDesc = desc0:Clone()
-        else avatarOriginalDesc = Instance.new("HumanoidDescription") end
+        if okD and desc0 then
+            local okC, cl = pcall(function() return desc0:Clone() end)
+            avatarOriginalDesc = (okC and cl) or desc0
+        else
+            avatarOriginalDesc = Instance.new("HumanoidDescription")
+        end
     end
     avatarMimicTargetId = userId
     task.spawn(function()
+        -- tunggu humanoid siap
+        task.wait(0.2)
+        local char2 = player.Character
+        local hum2 = char2 and char2:FindFirstChildOfClass("Humanoid")
+        if not hum2 then warn("[Mimic] hum2 hilang") return end
         local ok, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(userId) end)
-        if ok and desc and hum.Parent then
-            pcall(function() hum:ApplyDescription(desc) end)
+        if not ok or not desc then warn("[Mimic] GetDesc gagal", userId, desc) return end
+        -- ApplyDescription harus di Heartbeat setelah rig load
+        local okA, err = pcall(function() hum2:ApplyDescription(desc) end)
+        if not okA then warn("[Mimic] Apply gagal", err) end
+        -- fallback: coba via AppearanceAsync jika Apply gagal
+        if not okA then
+            pcall(function()
+                local m = Players:GetCharacterAppearanceAsync(userId)
+                -- local apply manual: load appearance ke char2 (jarang dipakai, tapi coba)
+            end)
         end
     end)
 end
@@ -2671,7 +2688,15 @@ if not IS_BF then
             if pl then avatarMimicTargetId=pl.UserId end
         end)
         createButton(pg, "Apply Mimic (Full Avatar)", function()
-            if avatarMimicTargetId then applyAvatarMimic(avatarMimicTargetId) end
+            local sel = mimicDrop.Get()
+            local pl = sel and mimicLabels[sel]
+            local uid = pl and pl.UserId or avatarMimicTargetId
+            if uid then
+                avatarMimicTargetId = uid
+                applyAvatarMimic(uid)
+            else
+                warn("[Mimic] pilih target dulu")
+            end
         end)
         createButton(pg, "Clear Mimic (Restore)", function() clearAvatarMimic() end)
         -- refresh list saat player join/leave
